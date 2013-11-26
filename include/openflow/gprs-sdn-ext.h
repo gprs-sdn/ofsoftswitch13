@@ -36,11 +36,34 @@ struct gprs_sdn_action_push_gprsns {
     uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_RESUBMIT. */
-	uint16_t tlli;					/* TLLI */
-	uint8_t nsapi;					/* NSAPI */
+    uint16_t tlli;					/* TLLI */
+    uint8_t nsapi;					/* NSAPI */
     uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct gprs_sdn_action_push_gprsns) == 16);
+
+struct gprs_sdn_action_push_ip {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_RESUBMIT. */
+    uint8_t reserved[2]; 
+    uint32_t dstip;			/* DESTINATION IP */
+    uint32_t srcip;			/* SOURCE IP */
+    uint8_t pad[4];	
+}; 
+OFP_ASSERT(sizeof(struct gprs_sdn_action_push_ip) == 24);
+
+struct gprs_sdn_action_push_udp {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_RESUBMIT. */
+    uint16_t dstport;		/* DESTINATION PORT */
+    uint16_t srcport;		/* SOURCE PORT */
+    uint8_t pad[2];
+};
+OFP_ASSERT(sizeof(struct gprs_sdn_action_push_udp) == 16);
 
 struct gprs_sdn_action_header {
     uint16_t type;                  /* OFPAT_VENDOR. */

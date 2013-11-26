@@ -25,6 +25,24 @@ struct ofl_exp_gprs_sdn_act_push_gprsns {
     uint16_t nsapi;
 };
 
+struct ofl_exp_gprs_sdn_act_push_ip {
+    struct ofl_action_experimenter header;
+    
+    uint16_t subtype;
+
+    uint32_t dstip;
+    uint32_t srcip;
+};
+
+struct ofl_exp_gprs_sdn_act_push_udp {
+    struct ofl_action_experimenter header;
+    
+    uint16_t subtype;
+
+    uint16_t dstport;
+    uint16_t srcport;
+};
+
 int
 ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src, struct ofp_action_header *dst);
 

@@ -51,28 +51,58 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 			}
 			break;
 
-		case GPRS_SDN_HELLO:
-	 	case GPRS_SDN_PUSH_IP:
-		case GPRS_SDN_POP_IP:
+		 case GPRS_SDN_PUSH_IP:
+			 if (*len < sizeof(struct gprs_sdn_action_push_ip)) {
+				 err_small = false;
+			 } else {
+				 struct ofl_exp_gprs_sdn_act_push_ip *ofl;
+				 struct gprs_sdn_action_push_ip *exp2 = (struct gprs_sdn_action_push_ip*) exp;
+				 ofl = (struct ofl_exp_gprs_sdn_act_push_ip*) malloc(sizeof(*ofl));
+				 //TODO naparsovat zvysok ofl struktury
+				 ofl->subtype = ntohs(exp->subtype);
+				 ofl->dstip = ntohl(exp2->dstip);
+				 ofl->srcip = ntohl(exp2->srcip);
+				 //TODO:
+				 *dst = (struct ofl_action_header*) ofl;
+			 }
+			 break;
+
 		case GPRS_SDN_PUSH_UDP:
+			if (*len < sizeof(struct gprs_sdn_action_push_udp)) {
+				err_small = false;
+			} else {
+				struct ofl_exp_gprs_sdn_act_push_udp *ofl;
+				struct gprs_sdn_action_push_udp *exp2 = (struct gprs_sdn_action_push_udp*) exp;
+				ofl = (struct ofl_exp_gprs_sdn_act_push_udp*) malloc(sizeof(*ofl));
+				//TODO naparsovat zvysok ofl struktury
+				ofl->subtype = ntohs(exp->subtype);
+				ofl->dstport = ntohs(exp2->dstport);
+				ofl->srcport = ntohs(exp2->srcport);
+				//TODO:
+				*dst = (struct ofl_action_header*) ofl;
+			}
+			break;
+
+		case GPRS_SDN_HELLO:
+		case GPRS_SDN_POP_IP:
 		case GPRS_SDN_POP_UDP:
 		case GPRS_SDN_POP_GPRSNS: {
 			struct ofl_exp_gprs_sdn_act_header *ofl;
-		    ofl = (struct exp_gprs_sdn_act_header*) malloc(sizeof(*ofl));
+			ofl = (struct exp_gprs_sdn_act_header*) malloc(sizeof(*ofl));
 			//TODO: make clean - parsovat niekde inde
 			ofl->header.header.type = OFPAT_EXPERIMENTER;
 			ofl->header.header.len = ntohs(exp->len);
 			ofl->header.experimenter_id = GPRS_SDN_VENDOR_ID;
 			ofl->subtype = ntohs(exp->subtype);
 			*dst = (struct ofl_action_header*) ofl;
-			break;
 			}
+			break;
 		}
 	}
 
 	if (err_small) {
-        OFL_LOG_WARN(LOG_MODULE, "Received EXPERIMENTER action has invalid length (%zu).", *len);
-        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+		OFL_LOG_WARN(LOG_MODULE, "Received EXPERIMENTER action has invalid length (%zu).", *len);
+		return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
 	} else {
 		*len -= ntohs(src->len);
 	}
@@ -94,12 +124,15 @@ ofl_exp_gprs_sdn_act_ofp_len(struct ofl_action_header *act) {
 	//TODO: other types
 	case GPRS_SDN_PUSH_GPRSNS:
 		return sizeof(struct gprs_sdn_action_push_gprsns);
-	case GPRS_SDN_HELLO:
-	case GPRS_SDN_PUSH_IP:
-	case GPRS_SDN_POP_IP:
 	case GPRS_SDN_PUSH_UDP:
+		return sizeof(struct gprs_sdn_action_push_udp);
+	case GPRS_SDN_PUSH_IP:
+		return sizeof(struct gprs_sdn_action_push_ip);
+	case GPRS_SDN_HELLO:
+	case GPRS_SDN_POP_IP:
 	case GPRS_SDN_POP_UDP:
 	case GPRS_SDN_POP_GPRSNS:
+		return sizeof(struct gprs_sdn_action_header);
 	}
 
 	OFL_LOG_WARN(LOG_MODULE, "Getting header size for invalid EXPERIMENTER action");
@@ -109,17 +142,17 @@ ofl_exp_gprs_sdn_act_ofp_len(struct ofl_action_header *act) {
 char *
 ofl_exp_gprs_sdn_act_to_string(struct ofl_action_header *act) {
 	struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
-    char *str;
-    size_t str_size;
-    FILE *stream = open_memstream(&str, &str_size);
+	char *str;
+	size_t str_size;
+	FILE *stream = open_memstream(&str, &str_size);
 
 	switch(exp->subtype) {
 	default:
-        fprintf(stream, "exp{gprs_sdn,subtype=\"%u\"}", exp->subtype);
-    }
+		fprintf(stream, "exp{gprs_sdn,subtype=\"%u\"}", exp->subtype);
+	}
 
-    fclose(stream);
-    return str;
+	fclose(stream);
+	return str;
 }
 
 
