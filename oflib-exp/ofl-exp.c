@@ -27,6 +27,7 @@
  *
  *
  * Author: Zoltán Lajos Kis <zoltan.lajos.kis@ericsson.com>
+ * Author: Ján Skalný <jan@skalny.sk>
  */
 
 #include <inttypes.h>
@@ -36,9 +37,11 @@
 #include "ofl-exp.h"
 #include "ofl-exp-nicira.h"
 #include "ofl-exp-openflow.h"
+#include "ofl-exp-gprs-sdn.h"
 #include "../oflib/ofl-messages.h"
 #include "../oflib/ofl-log.h"
 #include "openflow/openflow.h"
+#include "openflow/gprs-sdn-ext.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow-ext.h"
 
@@ -125,3 +128,93 @@ ofl_exp_msg_to_string(struct ofl_msg_experimenter *msg) {
         }
     }
 }
+
+int
+ofl_exp_act_pack(struct ofl_action_header *src, struct ofp_action_header *dst) {
+	struct ofl_action_experimenter *exp = (struct ofl_action_experimenter*) src;
+
+    switch (exp->experimenter_id) {
+        case (GPRS_SDN_VENDOR_ID): {
+            return ofl_exp_gprs_sdn_act_pack(src, dst);
+        }
+        default: {
+            OFL_LOG_WARN(LOG_MODULE, "Trying to pack unknown EXPERIMENTER action (%u).", exp->experimenter_id);
+            return -1;
+        }
+    }
+}
+
+ofl_err
+ofl_exp_act_unpack(struct ofp_action_header *src, size_t *len, struct ofl_action_header **dst) {
+    struct ofp_action_experimenter_header *exp;
+
+    if (*len < sizeof(struct ofp_action_experimenter_header)) {
+        OFL_LOG_WARN(LOG_MODULE, "Received EXPERIMENTER action is shorter than ofp_action_experimenter_header.");
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+
+    exp = (struct ofp_action_experimenter_header *)src;
+
+    switch (ntohl(exp->experimenter)) {
+        case (GPRS_SDN_VENDOR_ID): {
+            return ofl_exp_gprs_sdn_act_unpack(src, len, dst);
+        }
+        default: {
+            OFL_LOG_WARN(LOG_MODULE, "Trying to unpack unknown EXPERIMENTER action (%u).", ntohl(exp->experimenter));
+            *len -= ntohs(src->len);
+            return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_EXPERIMENTER);
+        }
+    }
+}
+
+int
+ofl_exp_act_free(struct ofl_action_header *act) {
+	struct ofl_action_experimenter *exp = (struct ofl_action_experimenter*) act;
+
+    switch (exp->experimenter_id) {
+        case (GPRS_SDN_VENDOR_ID): {
+            return ofl_exp_gprs_sdn_act_free(act);
+        }
+        default: {
+            OFL_LOG_WARN(LOG_MODULE, "Trying to free unknown EXPERIMENTER action (%u).", exp->experimenter_id);
+            free(act);
+            return -1;
+        }
+    }
+}
+
+size_t
+ofl_exp_act_ofp_len(struct ofl_action_header *act) {
+	struct ofl_action_experimenter *exp = (struct ofl_action_experimenter*) act;
+
+    switch (exp->experimenter_id) {
+        case (GPRS_SDN_VENDOR_ID): {
+            return ofl_exp_gprs_sdn_act_ofp_len(act);
+        }
+	}
+
+	OFL_LOG_WARN(LOG_MODULE, "Trying to get packet line-size for unknown EXPERIMENTER action (%u).", exp->experimenter_id);
+	return sizeof(struct ofp_action_experimenter_header);
+}
+
+char *
+ofl_exp_act_to_string(struct ofl_action_header *act) {
+	struct ofl_action_experimenter *exp = (struct ofl_action_experimenter*) act;
+
+    switch (exp->experimenter_id) {
+        case (GPRS_SDN_VENDOR_ID): {
+            return ofl_exp_gprs_sdn_act_to_string(act);
+        }
+        default: {
+            char *str;
+            size_t str_size;
+            FILE *stream = open_memstream(&str, &str_size);
+            OFL_LOG_WARN(LOG_MODULE, "Trying to convert to string unknown EXPERIMENTER action (%u).", exp->experimenter_id);
+            fprintf(stream, "exp{id=\"0x%"PRIx32"\"}", exp->experimenter_id);
+            fclose(stream);
+            return str;
+        }
+    }
+}
+
+

@@ -38,9 +38,11 @@
 #include "oflib/ofl-actions.h"
 #include "oflib/ofl-structs.h"
 #include "oflib/ofl-messages.h"
+#include "oflib-exp/ofl-exp-gprs-sdn.h"
 #include "oflib-exp/ofl-exp-openflow.h"
 #include "oflib-exp/ofl-exp-nicira.h"
 #include "openflow/openflow.h"
+#include "openflow/gprs-sdn-ext.h"
 #include "openflow/openflow-ext.h"
 #include "openflow/nicira-ext.h"
 #include "vlog.h"
@@ -49,8 +51,35 @@
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
+
+//XXX: toto ide niekam inam
+void
+dp_exp_action_hello_world() {
+	printf("ahoj svet\n");
+	fflush(stdout);
+}
+
+
 void
 dp_exp_action(struct packet * pkt UNUSED, struct ofl_action_experimenter *act) {
+	uint16_t subtype;
+	uint8_t *data;
+	
+	printf("experimenter action - vendor=%d, len=%d\n", act->experimenter_id, act->header.len);
+	switch(act->experimenter_id) {
+	case GPRS_SDN_VENDOR_ID: {
+		struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
+		switch (exp->subtype) {
+		//TODO: dalsie subtypy
+		case GPRS_SDN_HELLO:
+			return dp_exp_action_hello_world();
+		default:
+			VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
+		}
+		return;
+		}
+	}
+
 	VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown experimenter action (%u).", act->experimenter_id);
 }
 
@@ -74,7 +103,7 @@ dp_exp_message(struct datapath *dp,
                                const struct sender *sender) {
 
     switch (msg->experimenter_id) {
-        case (OPENFLOW_VENDOR_ID): {
+		case (OPENFLOW_VENDOR_ID): {
             struct ofl_exp_openflow_msg_header *exp = (struct ofl_exp_openflow_msg_header *)msg;
 
             switch(exp->type) {
@@ -98,3 +127,5 @@ dp_exp_message(struct datapath *dp,
         }
     }
 }
+
+

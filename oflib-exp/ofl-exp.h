@@ -27,6 +27,7 @@
  *
  *
  * Author: Zoltán Lajos Kis <zoltan.lajos.kis@ericsson.com>
+ * Author: Ján Skalný <jan@skalny.sk>
  */
 
 #ifndef OFL_EXP_H
@@ -47,6 +48,22 @@ ofl_exp_msg_free(struct ofl_msg_experimenter *msg);
 
 char *
 ofl_exp_msg_to_string(struct ofl_msg_experimenter *msg);
+
+int
+ofl_exp_act_pack(struct ofl_action_header *src, struct ofp_action_header *dst);
+
+ofl_err
+ofl_exp_act_unpack(struct ofp_action_header *src, size_t *len, struct ofl_action_header **dst);
+
+int
+ofl_exp_act_free(struct ofl_action_header *act);
+
+size_t
+ofl_exp_act_ofp_len(struct ofl_action_header *act);
+
+char *
+ofl_exp_act_to_string(struct ofl_action_header *act);
+
 
 
 #endif /* OFL_EXP_H */
