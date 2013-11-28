@@ -280,11 +280,21 @@
 /* IPv4 TTL */
 #define OXM_OF_IPV4_TTL OXM_HEADER (0x0002, 81, 1)
 
+/* ## ------------------------------- ## */
+/* ## GPRS fields. ## */
+/* ## ------------------------------- ## */
+
+/* NS type  */
+#define OXM_GPRS_NS_TYPE OXM_HEADER (0x7fff, 1, 1)
+
+/* NS-UNITDATA BVCI  */
+#define OXM_GPRS_NS_BVCI OXM_HEADER (0x7fff, 2, 1)
+
 enum oxm_field_index {
 #define DEFINE_FIELD(HEADER,DL_TYPES, NW_PROTO, MASKABLE) \
         OFI_OXM_##HEADER,
 #include "oxm-match.def"
-    NUM_OXM_FIELDS = 56
+    NUM_OXM_FIELDS = 56+2 //FIXME:
 };
 
 struct oxm_field {

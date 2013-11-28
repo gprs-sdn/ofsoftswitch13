@@ -607,6 +607,26 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
 
         }
 
+    struct gprsns_header *gprsns;
+
+    //FIXME: 
+    // is this IP/GPRS-NS packet?
+    if (pkt_proto->ipv4 &&
+        pkt_proto->ipv4->ip_proto == IP_TYPE_UDP &&
+        pkt_proto->udp &&
+        pkt_proto->udp->udp_dst == 23000) {
+
+        // decode GPRSNS
+        pkt_proto->gprsns = gprsns = (struct gprsns_header*)((uint8_t*)(pkt_proto->udp) + UDP_HEADER_LEN);
+        if (gprsns->type != GPRSNS_TYPE_UNITDATA)
+            return 1;
+        ofl_structs_match_put8(pktout, OXM_GPRS_NS_TYPE, gprsns->type);
+        ofl_structs_match_put16(pktout, OXM_GPRS_NS_BVCI, gprsns->bvci);
+
+        // decode BSSGP, LLC, SNDCP
+        //TODO:
+    }
+
     return 1;
 }
 

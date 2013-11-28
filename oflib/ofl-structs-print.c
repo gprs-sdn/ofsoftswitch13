@@ -234,17 +234,15 @@ ofl_structs_oxm_tlv_to_string(struct ofl_match_tlv *f) {
 void
 ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
 {
-	uint8_t field = OXM_FIELD(f->header);
+	switch (f->header) {
 
-	switch (field) {
-
-		case OFPXMT_OFB_IN_PORT:
+		case OXM_OF_IN_PORT:
 			fprintf(stream, "in_port=\"%d\"", *((uint32_t*) f->value));
 			break;
-		case OFPXMT_OFB_IN_PHY_PORT:
+		case OXM_OF_IN_PHY_PORT:
 			fprintf(stream, "in_phy_port=\"%d\"", *((uint32_t*) f->value));
 			break;
-		case OFPXMT_OFB_VLAN_VID: {
+		case OXM_OF_VLAN_VID: {
 			uint16_t v = *((uint16_t *) f->value);
 			if (v == OFPVID_NONE)
 				fprintf(stream, "vlan_vid= none");
@@ -254,97 +252,97 @@ ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
 				fprintf(stream, "vlan_vid=\"%d\"",v & VLAN_VID_MASK);
 			break;
 		}
-		case OFPXMT_OFB_VLAN_PCP:
+		case OXM_OF_VLAN_PCP:
 			fprintf(stream, "vlan_pcp=\"%d\"", *f->value & 0x7);
 			break;
-		case OFPXMT_OFB_ETH_TYPE:
+		case OXM_OF_ETH_TYPE:
 			fprintf(stream, "eth_type=\"0x%x\"",  *((uint16_t *) f->value));
 			break;
-		case OFPXMT_OFB_TCP_SRC:
+		case OXM_OF_TCP_SRC:
 			fprintf(stream, "tcp_src=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_TCP_DST:
+		case OXM_OF_TCP_DST:
 			fprintf(stream, "tcp_dst=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_UDP_SRC:
+		case OXM_OF_UDP_SRC:
 			fprintf(stream, "udp_src=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_UDP_DST:
+		case OXM_OF_UDP_DST:
 			fprintf(stream, "udp_dst=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_SCTP_SRC:
+		case OXM_OF_SCTP_SRC:
 			fprintf(stream, "sctp_src=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_SCTP_DST:
+		case OXM_OF_SCTP_DST:
 			fprintf(stream, "sctp_dst=\"%d\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_ETH_SRC:
+		case OXM_OF_ETH_SRC:
 			fprintf(stream, "eth_src=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", eth_src_mask=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value + 6));
 			}
 			break;
-		case OFPXMT_OFB_ETH_DST:
+		case OXM_OF_ETH_DST:
 			fprintf(stream, "eth_dst=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", eth_dst_mask=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value + 6));
 			}
 			break;
-		case OFPXMT_OFB_IPV4_DST:
+		case OXM_OF_IPV4_DST:
 			fprintf(stream, "ipv4_dst=\""IP_FMT"\"", IP_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", ipv4_dst_mask=\""IP_FMT"\"", IP_ARGS(f->value + 4));
 			}
 			break;
-		case OFPXMT_OFB_IPV4_SRC:
+		case OXM_OF_IPV4_SRC:
 			fprintf(stream, "ipv4_src=\""IP_FMT"\"", IP_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", ipv4_src_mask=\""IP_FMT"\"", IP_ARGS(f->value + 4));
 			}
 			break;
-		case OFPXMT_OFB_IP_PROTO:
+		case OXM_OF_IP_PROTO:
 			fprintf(stream, "ip_proto=\"%d\"", *f->value);
 			break;
-		case OFPXMT_OFB_IP_DSCP:
+		case OXM_OF_IP_DSCP:
 			fprintf(stream, "ip_dscp=\"%d\"", *f->value & 0x3f);
 			break;
-		case OFPXMT_OFB_IP_ECN:
+		case OXM_OF_IP_ECN:
 			fprintf(stream, "ip_ecn=\"%d\"", *f->value & 0x3);
 			break;
-		case OFPXMT_OFB_ICMPV4_TYPE:
+		case OXM_OF_ICMPV4_TYPE:
 			fprintf(stream, "icmpv4_type= \"%d\"", *f->value);
 			break;
-		case OFPXMT_OFB_ICMPV4_CODE:
+		case OXM_OF_ICMPV4_CODE:
 			fprintf(stream, "icmpv4_code=\"%d\"", *f->value);
 			break;
-		case OFPXMT_OFB_ARP_SHA:
+		case OXM_OF_ARP_SHA:
 			fprintf(stream, "arp_sha=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", arp_sha_mask=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value + 6));
 			}
 			break;
-		case OFPXMT_OFB_ARP_THA:
+		case OXM_OF_ARP_THA:
 			fprintf(stream, "arp_tha=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", arp_tha_mask=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value + 6));
 			}
 			break;
-		case OFPXMT_OFB_ARP_SPA:
+		case OXM_OF_ARP_SPA:
 			fprintf(stream, "arp_spa=\""IP_FMT"\"", IP_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", arp_sha_mask=\""IP_FMT"\"", IP_ARGS(f->value + 4));
 			}
 			break;
-		case OFPXMT_OFB_ARP_TPA:
+		case OXM_OF_ARP_TPA:
 			fprintf(stream, "arp_tpa=\""IP_FMT"\"", IP_ARGS(f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", arp_tpa_mask=\""IP_FMT"\"", IP_ARGS(f->value + 4));
 			}
 			break;
-		case OFPXMT_OFB_ARP_OP:
+		case OXM_OF_ARP_OP:
 			fprintf(stream, "arp_op=\"0x%x\"", *((uint16_t*) f->value));
 			break;
-		case OFPXMT_OFB_IPV6_SRC: {
+		case OXM_OF_IPV6_SRC: {
 			char addr_str[INET6_ADDRSTRLEN];
 			inet_ntop(AF_INET6, f->value, addr_str, INET6_ADDRSTRLEN);
 			fprintf(stream, "nw_src_ipv6=\"%s\"", addr_str);
@@ -354,7 +352,7 @@ ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
 			}
 			break;
 		}
-		case OFPXMT_OFB_IPV6_DST: {
+		case OXM_OF_IPV6_DST: {
 			char addr_str[INET6_ADDRSTRLEN];
 			inet_ntop(AF_INET6, f->value, addr_str, INET6_ADDRSTRLEN);
 			fprintf(stream, "nw_dst_ipv6=\"%s\"", addr_str);
@@ -364,58 +362,58 @@ ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
 			}
 			break;
 		}
-		case OFPXMT_OFB_IPV6_ND_TARGET: {
+		case OXM_OF_IPV6_ND_TARGET: {
 			char addr_str[INET6_ADDRSTRLEN];
 			inet_ntop(AF_INET6, f->value, addr_str, INET6_ADDRSTRLEN);
 			fprintf(stream, "ipv6_nd_target=\"%s\"", addr_str);
 			break;
 		}
-		case OFPXMT_OFB_IPV6_ND_SLL:
+		case OXM_OF_IPV6_ND_SLL:
 			fprintf(stream, "ipv6_nd_sll=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			break;
-		case OFPXMT_OFB_IPV6_ND_TLL:
+		case OXM_OF_IPV6_ND_TLL:
 			fprintf(stream, "ipv6_nd_tll=\""ETH_ADDR_FMT"\"", ETH_ADDR_ARGS(f->value));
 			break;
-		case OFPXMT_OFB_IPV6_FLABEL:
+		case OXM_OF_IPV6_FLABEL:
 			fprintf(stream, "ipv6_flow_label=\"%d\"", *((uint32_t*) f->value) & 0x000fffff);
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", ipv6_flow_label_mask=\"%d\"", *((uint32_t*) (f->value+4)));
 			}
 			break;
-		case OFPXMT_OFB_ICMPV6_TYPE:
+		case OXM_OF_ICMPV6_TYPE:
 			fprintf(stream, "icmpv6_type=\"%d\"", *f->value);
 			break;
-		case OFPXMT_OFB_ICMPV6_CODE:
+		case OXM_OF_ICMPV6_CODE:
 			fprintf(stream, "icmpv6_code=\"%d\"", *f->value);
 			break;
-		case OFPXMT_OFB_MPLS_LABEL:
+		case OXM_OF_MPLS_LABEL:
 			fprintf(stream, "mpls_label=\"%d\"",((uint32_t) *f->value) & 0x000fffff);
 			break;
-		case OFPXMT_OFB_MPLS_TC:
+		case OXM_OF_MPLS_TC:
 			fprintf(stream, "mpls_tc=\"%d\"", *f->value & 0x3);
 			break;
-		case OFPXMT_OFB_MPLS_BOS:
+		case OXM_OF_MPLS_BOS:
 			fprintf(stream, "mpls_bos=\"%d\"", *f->value & 0xfe);
 			break;
-		case OFPXMT_OFB_METADATA:
+		case OXM_OF_METADATA:
 			fprintf(stream, "metadata=\"0x%llx\"", *((uint64_t*) f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", metadata_mask=\"0x%llx\"", *((uint64_t*)(f->value+8)));
 			}
 			break;
-		case OFPXMT_OFB_PBB_ISID   :
+		case OXM_OF_PBB_ISID   :
 			fprintf(stream, "pbb_isid=\"%d\"", *((uint32_t*) f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", pbb_isid_mask=\"%d\"", *((uint32_t*)(f->value+4)));
 			}
 			break;
-		case OFPXMT_OFB_TUNNEL_ID:
+		case OXM_OF_TUNNEL_ID:
 			fprintf(stream, "tunnel_id=\"%lld\"", *((uint64_t*) f->value));
 			if (OXM_HASMASK(f->header)) {
 				fprintf(stream, ", tunnel_id_mask=\"%lld\"", *((uint64_t*)(f->value+8)));
 			}
 			break;
-		case OFPXMT_OFB_IPV6_EXTHDR:
+		case OXM_OF_IPV6_EXTHDR:
 			fprintf(stream, "ext_hdr=\"");
 			ofl_ipv6_ext_hdr_print(stream, *((uint16_t*) f->value));
 			fprintf(stream, "\"");
@@ -423,8 +421,14 @@ ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
 				fprintf(stream, ", ext_hdr_mask=\"0x%x\"", *((uint16_t*)(f->value+4)));
 			}
 			break;
+        case OXM_GPRS_NS_TYPE:
+			fprintf(stream, "gprs_ns_type=\"%d\"", *(uint8_t*)(f->value));
+            break;
+        case OXM_GPRS_NS_BVCI:
+			fprintf(stream, "gprs_ns_bvci=\"%d\"", *(uint16_t*)(f->value));
+            break;
 		default:
-			fprintf(stream, "unknown type %d", field);
+			fprintf(stream, "unknown type 0x%08x", f->header);
 	}
 }
 

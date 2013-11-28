@@ -405,6 +405,16 @@ struct mpls_header {
 
 BUILD_ASSERT_DECL(MPLS_HEADER_LEN == sizeof(struct mpls_header));
 
+/* GPRS NS_UNITDATA */
+#define GPRSNS_TYPE_UNITDATA 0
+#define GPRSNS_HEADER_LEN 4
+struct gprsns_header {
+    uint8_t type;
+    uint8_t control;
+    uint16_t bvci;
+};
+BUILD_ASSERT_DECL(GPRSNS_HEADER_LEN == sizeof(struct gprsns_header));
+
 struct protocols_std {
    struct eth_header      * eth;
    struct snap_header     * eth_snap; /* points to SNAP header if eth is 802.3 */
@@ -419,6 +429,7 @@ struct protocols_std {
    struct udp_header      * udp;
    struct sctp_header     * sctp;
    struct icmp_header     * icmp;
+   struct gprsns_header   * gprsns;
 };
 
 static inline void
@@ -436,6 +447,7 @@ protocol_reset(struct protocols_std *proto) {
     proto->sctp      = NULL;
     proto->icmp      = NULL;
     proto->pbb       = NULL;
+    proto->gprsns    = NULL;
 }
 
 
