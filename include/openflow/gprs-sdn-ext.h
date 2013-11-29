@@ -19,14 +19,14 @@
 #define GPRS_SDN_VENDOR_ID 0x00000042
 
 enum gprs_sdn_action_subtype { /* custom actions */
-    GPRS_SDN_PUSH_GPRSNS, 
-    GPRS_SDN_POP_GPRSNS,
+    GPRS_SDN_PUSH_GPRSNS = 0x1, 
+    GPRS_SDN_POP_GPRSNS = 0x2,
 
-    GPRS_SDN_PUSH_IP,
-    GPRS_SDN_POP_IP,
+    GPRS_SDN_PUSH_IP = 0x3,
+    GPRS_SDN_POP_IP = 0x4,
 
-    GPRS_SDN_PUSH_UDP,
-    GPRS_SDN_POP_UDP,
+    GPRS_SDN_PUSH_UDP = 0x5,
+    GPRS_SDN_POP_UDP = 0x6,
 
     GPRS_SDN_HELLO = 0x0100,
 };
