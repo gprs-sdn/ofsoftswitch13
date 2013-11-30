@@ -288,13 +288,31 @@
 #define OXM_GPRS_NS_TYPE OXM_HEADER (0x7fff, 1, 1)
 
 /* NS-UNITDATA BVCI  */
-#define OXM_GPRS_NS_BVCI OXM_HEADER (0x7fff, 2, 1)
+#define OXM_GPRS_NS_BVCI OXM_HEADER (0x7fff, 2, 2)
+
+/* BSSGP TLLI */
+#define OXM_GPRS_BSSGP_TLLI OXM_HEADER (0x7fff, 3, 4)
+
+/* LLC SAPI */
+#define OXM_GPRS_LLC_SAPI OXM_HEADER (0x7fff, 4, 1)
+
+/* SNDCP NSAPI */
+#define OXM_GPRS_SNDCP_NSAPI OXM_HEADER (0x7fff, 5, 1)
+
+/* SNDCP first_segment bit */
+#define OXM_GPRS_SNDCP_FIRST_SEGMENT OXM_HEADER (0x7fff, 6, 1)
+
+/* SNDCP more_segments bit */
+#define OXM_GPRS_SNDCP_MORE_SEGMENTS OXM_HEADER (0x7fff, 7, 1)
+
+/* SNDCP compression field */
+#define OXM_GPRS_SNDCP_COMP OXM_HEADER (0x7fff, 8, 1)
 
 enum oxm_field_index {
 #define DEFINE_FIELD(HEADER,DL_TYPES, NW_PROTO, MASKABLE) \
         OFI_OXM_##HEADER,
 #include "oxm-match.def"
-    NUM_OXM_FIELDS = 56+2 //FIXME:
+    NUM_OXM_FIELDS = 56+8 //FIXME:
 };
 
 struct oxm_field {

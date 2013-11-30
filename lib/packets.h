@@ -415,6 +415,22 @@ struct gprsns_header {
 };
 BUILD_ASSERT_DECL(GPRSNS_HEADER_LEN == sizeof(struct gprsns_header));
 
+// TS 48.018 table 11.3
+#define BSSGP_DL_UNITDATA 0x00
+#define BSSGP_UL_UNITDATA 0x01
+#define BSSGP_LLC_PDU 0x0e
+
+// TS 48.064 chapter 6.3
+enum llc_frame_format {
+    LLC_I_FRAME, LLC_S_FRAME, LLC_UI_FRAME, LLC_U_FRAME
+};
+
+// TS 48.064
+#define LLC_SAPI_LL3 3
+#define LLC_SAPI_LL5 5
+#define LLC_SAPI_LL9 9
+#define LLC_SAPI_LL11 11
+
 struct protocols_std {
    struct eth_header      * eth;
    struct snap_header     * eth_snap; /* points to SNAP header if eth is 802.3 */
@@ -430,6 +446,17 @@ struct protocols_std {
    struct sctp_header     * sctp;
    struct icmp_header     * icmp;
    struct gprsns_header   * gprsns;
+   uint16_t bssgp_header_len;
+   uint8_t bssgp_pdu_type;
+   uint32_t bssgp_tlli;
+   uint16_t llc_header_len;
+   uint8_t llc_sapi;
+   enum llc_frame_format llc_frame_format;
+   uint16_t sndcp_header_len;
+   uint8_t sndcp_nsapi;
+   uint8_t sndcp_first_segment;
+   uint8_t sndcp_more_segments;
+   uint8_t sndcp_comp;
 };
 
 static inline void
@@ -448,6 +475,9 @@ protocol_reset(struct protocols_std *proto) {
     proto->icmp      = NULL;
     proto->pbb       = NULL;
     proto->gprsns    = NULL;
+    proto->bssgp_header_len = 0;
+    proto->llc_header_len = 0;
+    proto->sndcp_header_len = 0;
 }
 
 

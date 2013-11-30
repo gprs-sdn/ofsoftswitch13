@@ -455,6 +455,24 @@ parse_oxm_entry(struct ofl_match *match, const struct oxm_field *f,
             //TODO validate range
             ofl_structs_match_put16(match, f->header, ntohs(*((uint16_t*)value)));
             return 0;
+        case OFI_OXM_GPRS_BSSGP_TLLI:
+            ofl_structs_match_put32(match, f->header, ntohl(*((uint32_t*)value)));
+            return 0;
+        case OFI_OXM_GPRS_LLC_SAPI:
+            ofl_structs_match_put8(match, f->header, *((uint8_t*)value));
+            return 0;
+        case OFI_OXM_GPRS_SNDCP_NSAPI:
+            ofl_structs_match_put8(match, f->header, *((uint8_t*)value));
+            return 0;
+        case OFI_OXM_GPRS_SNDCP_FIRST_SEGMENT:
+            ofl_structs_match_put8(match, f->header, *((uint8_t*)value));
+            return 0;
+        case OFI_OXM_GPRS_SNDCP_MORE_SEGMENTS:
+            ofl_structs_match_put8(match, f->header, *((uint8_t*)value));
+            return 0;
+        case OFI_OXM_GPRS_SNDCP_COMP:
+            ofl_structs_match_put8(match, f->header, *((uint8_t*)value));
+            return 0;
         case NUM_OXM_FIELDS:
             NOT_REACHED();
     }

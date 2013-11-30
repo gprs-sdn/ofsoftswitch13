@@ -269,6 +269,13 @@ ofl_oxm_type_print(FILE *stream, uint32_t type){
     case OXM_OF_IPV6_EXTHDR:        {fprintf(stream, "ipv6_exthdr"); return; }
     case OXM_GPRS_NS_TYPE:          {fprintf(stream, "gprs_ns_type"); return; }
     case OXM_GPRS_NS_BVCI:          {fprintf(stream, "gprs_ns_bvci"); return; }
+    case OXM_GPRS_BSSGP_TLLI:       {fprintf(stream, "gprs_bssgp_tlli"); return; }
+    case OXM_GPRS_LLC_SAPI:         {fprintf(stream, "gprs_llc_sapi"); return; }
+    case OXM_GPRS_SNDCP_NSAPI:      {fprintf(stream, "gprs_sndcp_nsapi"); return; }
+    case OXM_GPRS_SNDCP_FIRST_SEGMENT: {fprintf(stream, "gprs_sndcp_first_segment"); return; }
+    case OXM_GPRS_SNDCP_MORE_SEGMENTS: {fprintf(stream, "gprs_sndcp_more_segments"); return; }
+    case OXM_GPRS_SNDCP_COMP:       {fprintf(stream, "gprs_sndcp_comp"); return; }
+
     default: {                       fprintf(stream, "?(%d)", type); return; }    
     }
 

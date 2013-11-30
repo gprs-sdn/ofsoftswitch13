@@ -427,6 +427,24 @@ ofl_structs_oxm_tlv_print(FILE *stream, struct ofl_match_tlv *f)
         case OXM_GPRS_NS_BVCI:
 			fprintf(stream, "gprs_ns_bvci=\"%d\"", *(uint16_t*)(f->value));
             break;
+        case OXM_GPRS_BSSGP_TLLI:
+			fprintf(stream, "gprs_bssgp_tlli=\"0x%08x\"", *(uint32_t*)(f->value));
+            break;
+        case OXM_GPRS_LLC_SAPI:
+			fprintf(stream, "gprs_llc_sapi=\"%d\"", *(uint8_t*)(f->value));
+            break;
+        case OXM_GPRS_SNDCP_NSAPI:
+			fprintf(stream, "gprs_sndcp_nsapi=\"%d\"", *(uint8_t*)(f->value));
+            break;
+        case OXM_GPRS_SNDCP_FIRST_SEGMENT:
+			fprintf(stream, "gprs_sndcp_first_segment=\"%d\"", *(uint8_t*)(f->value));
+            break;
+        case OXM_GPRS_SNDCP_MORE_SEGMENTS:
+			fprintf(stream, "gprs_sndcp_more_segments=\"%d\"", *(uint8_t*)(f->value));
+            break;
+        case OXM_GPRS_SNDCP_COMP:
+			fprintf(stream, "gprs_sndcp_comp=\"0x%02x\"", *(uint8_t*)(f->value));
+            break;
 		default:
 			fprintf(stream, "unknown type 0x%08x", f->header);
 	}
