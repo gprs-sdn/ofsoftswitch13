@@ -36,11 +36,13 @@ struct gprs_sdn_action_push_gprsns {
     uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_RESUBMIT. */
-    uint16_t tlli;					/* TLLI */
+    uint16_t bvci;                  /* BVCI */
+    uint32_t tlli;					/* TLLI */
+    uint8_t sapi;					/* NSAPI */
     uint8_t nsapi;					/* NSAPI */
-    uint8_t pad[3];
+    uint8_t pad[6];
 };
-OFP_ASSERT(sizeof(struct gprs_sdn_action_push_gprsns) == 16);
+OFP_ASSERT(sizeof(struct gprs_sdn_action_push_gprsns) == 24);
 
 struct gprs_sdn_action_push_ip {
     uint16_t type;                  /* OFPAT_VENDOR. */
