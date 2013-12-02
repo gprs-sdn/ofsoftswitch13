@@ -21,7 +21,7 @@ ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src, struct ofp_action_heade
 	// TODO
 	// aby fungovalo poriadne aj dpctl... 
 	// inac je nam vytvaranie packetov na nic
-	return -1;
+    return -1;
 }
 
 ofl_err
@@ -51,21 +51,21 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 			}
 			break;
 
-		 case GPRS_SDN_PUSH_IP:
-			 if (*len < sizeof(struct gprs_sdn_action_push_ip)) {
+		case GPRS_SDN_PUSH_IP:
+		    if (*len < sizeof(struct gprs_sdn_action_push_ip)) {
 				 err_small = false;
-			 } else {
-				 struct ofl_exp_gprs_sdn_act_push_ip *ofl;
-				 struct gprs_sdn_action_push_ip *exp2 = (struct gprs_sdn_action_push_ip*) exp;
-				 ofl = (struct ofl_exp_gprs_sdn_act_push_ip*) malloc(sizeof(*ofl));
-				 //TODO naparsovat zvysok ofl struktury
-				 ofl->subtype = ntohs(exp->subtype);
-				 ofl->dstip = ntohl(exp2->dstip);
-				 ofl->srcip = ntohl(exp2->srcip);
-				 //TODO:
-				 *dst = (struct ofl_action_header*) ofl;
-			 }
-			 break;
+		    } else {
+		        struct ofl_exp_gprs_sdn_act_push_ip *ofl;
+				struct gprs_sdn_action_push_ip *exp2 = (struct gprs_sdn_action_push_ip*) exp;
+				ofl = (struct ofl_exp_gprs_sdn_act_push_ip*) malloc(sizeof(*ofl));
+				//TODO naparsovat zvysok ofl struktury
+				ofl->subtype = ntohs(exp->subtype);
+				ofl->dstip = ntohl(exp2->dstip);
+				ofl->srcip = ntohl(exp2->srcip);
+				//TODO:
+				*dst = (struct ofl_action_header*) ofl;
+			}
+			break;
 
 		case GPRS_SDN_PUSH_UDP:
 			if (*len < sizeof(struct gprs_sdn_action_push_udp)) {
@@ -83,12 +83,12 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 			}
 			break;
 
-		case GPRS_SDN_HELLO:
 		case GPRS_SDN_POP_IP:
-		case GPRS_SDN_POP_UDP:
+        case GPRS_SDN_POP_UDP: 
+		case GPRS_SDN_HELLO:
 		case GPRS_SDN_POP_GPRSNS: {
 			struct ofl_exp_gprs_sdn_act_header *ofl;
-			ofl = (struct exp_gprs_sdn_act_header*) malloc(sizeof(*ofl));
+			ofl = (struct ofl_exp_gprs_sdn_act_header*) malloc(sizeof(*ofl));
 			//TODO: make clean - parsovat niekde inde
 			ofl->header.header.type = OFPAT_EXPERIMENTER;
 			ofl->header.header.len = ntohs(exp->len);
