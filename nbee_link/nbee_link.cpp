@@ -616,7 +616,7 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
     if (pkt_proto->ipv4 &&
         pkt_proto->ipv4->ip_proto == IP_TYPE_UDP &&
         pkt_proto->udp &&
-        pkt_proto->udp->udp_dst == 23000) {
+        pkt_proto->udp->udp_dst == htons(23000)) {
 
         ///////////////////
         // decode GPRSNS
