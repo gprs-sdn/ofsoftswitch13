@@ -59,9 +59,89 @@ dp_exp_action_hello_world() {
 	fflush(stdout);
 }
 
+//TODO
+void
+dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    
+}
 
 void
-dp_exp_action(struct packet * pkt UNUSED, struct ofl_action_experimenter *act) {
+dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    //validate handle
+    packet_handle_std_validate(pkt->handle_std);
+    //verify packets
+    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL && pkt->handle_std->proto->udp != NULL && pkt->handle_std->proto->gprsns != NULL) {
+        struct gprsns_header *gprsns = pkt->handle_std->proto->gprsns;
+        size_t move_size;
+
+    //TODO        
+
+   
+        //memmove
+        memmove(pkt->buffer->data, gprsns, move_size); 
+        //set handle to false
+        pkt->handle_std->valid = false;
+    }
+    //else 
+    else {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_GPRSNS action on packet with no gprsns.");
+    }
+}
+
+void
+dp_exp_action_push_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){ 
+    //
+}
+
+void
+dp_exp_action_pop_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    packet_handle_std_validate(pkt->handle_std);
+    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL) {
+        struct ip_header *ip = pkt->handle_std->proto->ipv4;
+        size_t move_size;
+       
+        //toto nemusi byt presne 
+        pkt->buffer->data = (uint8_t *)pkt->buffer->data + IP_HEADER_LEN;
+        pkt->buffer->size -= IP_HEADER_LEN;
+        
+        move_size = 4 * IP_IHL(ip->ip_ihl_ver);
+        //move_size = IP_HEADER_LEN;
+        memmove(pkt->buffer->data, ip, move_size);
+        pkt->handle_std->valid = false;
+    }
+
+    else {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_IP action on packet with no ip.");
+    }
+}
+
+void
+dp_exp_action_push_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+
+}
+
+void
+dp_exp_action_pop_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    packet_handle_std_validate(pkt->handle_std);
+    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL && pkt->handle_std->proto->udp != NULL) {
+        struct udp_header *udp = pkt->handle_std->proto->udp;
+        size_t move_size;
+        
+        pkt->buffer->data = (uint8_t *)pkt->buffer->data + UDP_HEADER_LEN;
+        pkt->buffer->size -= UDP_HEADER_LEN;
+        
+        move_size = UDP_HEADER_LEN;
+        memmove(pkt->buffer->data, udp, move_size);
+        pkt->handle_std->valid = false;     
+    }
+
+    else {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_UDP action on packet with no udp.");
+    }
+}
+
+void
+dp_exp_action(struct packet * pkt, struct ofl_action_experimenter *act) {
 	uint16_t subtype;
 	uint8_t *data;
 	
@@ -71,8 +151,19 @@ dp_exp_action(struct packet * pkt UNUSED, struct ofl_action_experimenter *act) {
 		struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
 		switch (exp->subtype) {
 		//TODO: dalsie subtypy
-		case GPRS_SDN_HELLO:
-			return dp_exp_action_hello_world();
+		case GPRS_SDN_PUSH_GPRSNS:
+            return dp_exp_action_push_gprsns(pkt, exp);
+        case GPRS_SDN_POP_GPRSNS:
+            return dp_exp_action_pop_gprsns(pkt, exp);
+        case GPRS_SDN_PUSH_IP:
+            return dp_exp_action_push_ip(pkt, exp);
+        case GPRS_SDN_POP_IP:
+            return dp_exp_action_pop_ip(pkt, exp);
+        case GPRS_SDN_PUSH_UDP:
+            return dp_exp_action_push_udp(pkt, exp);
+        case GPRS_SDN_POP_UDP:
+            return dp_exp_action_pop_udp(pkt, exp);
+        case GPRS_SDN_HELLO:
 		default:
 			VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
 		}
