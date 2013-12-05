@@ -70,15 +70,29 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
     //validate handle
     packet_handle_std_validate(pkt->handle_std);
     //verify packets
-    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL && pkt->handle_std->proto->udp != NULL && pkt->handle_std->proto->gprsns != NULL) {
+    if(pkt->handle_std->proto->gprsns != NULL) {
+        struct protocols_std *proto = pkt->handle_std->proto;
+        struct eth_header *eth = pkt->handle_std->proto->eth;
         struct gprsns_header *gprsns = pkt->handle_std->proto->gprsns;
         size_t move_size;
 
     //TODO        
-
+        move_size = GPRSNS_HEADER_LEN + 
+            proto->bssgp_header_len + 
+            proto->llc_header_len +
+            proto->sndcp_header_len;
    
+        pkt->buffer->data = (uint8_t *) pkt->buffer->data + move_size;
+        pkt->buffer->size -= move_size;
+
         //memmove
-        memmove(pkt->buffer->data, gprsns, move_size); 
+        //ak je velkost LLC > 0 treba odstranit 3B FCS za pouz. datami
+        //skratit dlzku o 3
+        if (proto->llc_header_len > 0) pkt->buffer->size -= 3;
+        
+        //memmove
+        move_size = (uint8_t *) gprsns - (uint8_t *) eth; 
+        memmove(pkt->buffer->data, eth, move_size);
         //set handle to false
         pkt->handle_std->valid = false;
     }
@@ -97,16 +111,16 @@ void
 dp_exp_action_pop_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
     packet_handle_std_validate(pkt->handle_std);
     if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL) {
+        struct eth_header *eth = pkt->handle_std->proto->eth;
         struct ip_header *ip = pkt->handle_std->proto->ipv4;
         size_t move_size;
        
-        //toto nemusi byt presne 
-        pkt->buffer->data = (uint8_t *)pkt->buffer->data + IP_HEADER_LEN;
-        pkt->buffer->size -= IP_HEADER_LEN;
+        pkt->buffer->data = (uint8_t *)pkt->buffer->data + (4 * IP_IHL(ip->ip_ihl_ver));
+        pkt->buffer->size -= (4 * IP_IHL(ip->ip_ihl_ver));
+       
         
-        move_size = 4 * IP_IHL(ip->ip_ihl_ver);
-        //move_size = IP_HEADER_LEN;
-        memmove(pkt->buffer->data, ip, move_size);
+        move_size = (uint8_t *) ip - (uint8_t *) eth;
+        memmove(pkt->buffer->data, eth, move_size);
         pkt->handle_std->valid = false;
     }
 
@@ -124,14 +138,15 @@ void
 dp_exp_action_pop_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
     packet_handle_std_validate(pkt->handle_std);
     if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL && pkt->handle_std->proto->udp != NULL) {
+        struct eth_header *eth = pkt->handle_std->proto->eth;
         struct udp_header *udp = pkt->handle_std->proto->udp;
         size_t move_size;
         
         pkt->buffer->data = (uint8_t *)pkt->buffer->data + UDP_HEADER_LEN;
         pkt->buffer->size -= UDP_HEADER_LEN;
         
-        move_size = UDP_HEADER_LEN;
-        memmove(pkt->buffer->data, udp, move_size);
+        move_size = (uint8_t *) udp - (uint8_t *) eth;
+        memmove(pkt->buffer->data, eth, move_size);
         pkt->handle_std->valid = false;     
     }
 
