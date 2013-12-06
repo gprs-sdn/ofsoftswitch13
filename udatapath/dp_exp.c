@@ -76,7 +76,6 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
         struct gprsns_header *gprsns = pkt->handle_std->proto->gprsns;
         size_t move_size;
 
-    //TODO        
         move_size = GPRSNS_HEADER_LEN + 
             proto->bssgp_header_len + 
             proto->llc_header_len +
@@ -93,6 +92,7 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
         //memmove
         move_size = (uint8_t *) gprsns - (uint8_t *) eth; 
         memmove(pkt->buffer->data, eth, move_size);
+
         //set handle to false
         pkt->handle_std->valid = false;
     }
