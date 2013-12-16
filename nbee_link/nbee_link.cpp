@@ -667,8 +667,8 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
             if (t == BSSGP_LLC_PDU) {
                 // o points to LLC header
                 // l contains LLC header length + payload
-                len += 2;
-                o += 2;
+                len += 3;
+                o += 3;
                 break;
             }
 
@@ -684,6 +684,7 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
         pkt_proto->llc_sapi = (*o)&0x0f;
         ofl_structs_match_put8(pktout, OXM_GPRS_LLC_SAPI, pkt_proto->llc_sapi);
         printf("LLC sapi=%d\n", pkt_proto->llc_sapi);
+        printf("LLC HDR %02x %02x %02x\n", *o, *(o+1), *(o+2));
         // control max 36B
         
         uint8_t control = *(o+1);
@@ -712,10 +713,10 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
         pkt_proto->llc_header_len = len;
 
         if (pkt_proto->llc_frame_format != LLC_UI_FRAME ||
-            !(pkt_proto->llc_sapi != LLC_SAPI_LL3 &&
-              pkt_proto->llc_sapi != LLC_SAPI_LL5 &&
-              pkt_proto->llc_sapi != LLC_SAPI_LL9 &&
-              pkt_proto->llc_sapi != LLC_SAPI_LL11))
+            !(pkt_proto->llc_sapi == LLC_SAPI_LL3 || 
+              pkt_proto->llc_sapi == LLC_SAPI_LL5 ||
+              pkt_proto->llc_sapi == LLC_SAPI_LL9 ||
+              pkt_proto->llc_sapi == LLC_SAPI_LL11))
             // not an SNDCP frame
             return 1;
 
@@ -732,12 +733,12 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
         // first_segment
         pkt_proto->sndcp_first_segment = ((*o)&0x40) ? 1 : 0;
         printf("SNDCP first_segment=%d\n", pkt_proto->sndcp_first_segment);
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_FIRST_SEGMENT, pkt_proto->sndcp_comp);
+        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_FIRST_SEGMENT, pkt_proto->sndcp_first_segment);
         
         // more_segments
         pkt_proto->sndcp_more_segments = ((*o)&0x10) ? 1 : 0;
         printf("SNDCP more_segments=%d\n", pkt_proto->sndcp_more_segments);
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_MORE_SEGMENTS, pkt_proto->sndcp_comp);
+        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_MORE_SEGMENTS, pkt_proto->sndcp_more_segments);
 
         // SN-PDU type
         if ((*o)&0x20) {

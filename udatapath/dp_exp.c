@@ -179,6 +179,7 @@ dp_exp_action(struct packet * pkt, struct ofl_action_experimenter *act) {
         case GPRS_SDN_POP_UDP:
             return dp_exp_action_pop_udp(pkt, exp);
         case GPRS_SDN_HELLO:
+            return dp_exp_action_hello_world();
 		default:
 			VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
 		}
