@@ -31,6 +31,7 @@ nbPDMLReader *PDMLReader;
 int PacketCounter= 1;
 struct pcap_pkthdr * pkhdr;
 
+int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, struct protocols_std * pkt_proto);
 
 #define NETPDLFILE "customnetpdl.xml"
 
@@ -607,160 +608,185 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
 
         }
 
-    uint8_t *o;
-    uint16_t len;
-    struct gprsns_header *gprsns;
-
-    //FIXME: 
-    // is this IP/GPRS-NS packet?
-    if (pkt_proto->ipv4 &&
-        pkt_proto->ipv4->ip_proto == IP_TYPE_UDP &&
-        pkt_proto->udp &&
-        pkt_proto->udp->udp_dst == htons(23000)) {
-
-        ///////////////////
-        // decode GPRSNS
-        o = (uint8_t*)(pkt_proto->udp) + UDP_HEADER_LEN;
-        pkt_proto->gprsns = gprsns = (struct gprsns_header*)(o);
-        if (gprsns->type != GPRSNS_TYPE_UNITDATA)
-            return 1;
-        ofl_structs_match_put8(pktout, OXM_GPRS_NS_TYPE, gprsns->type);
-        ofl_structs_match_put16(pktout, OXM_GPRS_NS_BVCI, ntohs(gprsns->bvci));
-
-        ///////////////////
-        // decode BSSGP
-        o += GPRSNS_HEADER_LEN;
-        pkt_proto->bssgp_pdu_type = *o;
-        switch (pkt_proto->bssgp_pdu_type) {
-        case BSSGP_DL_UNITDATA:
-            // TS 48.018 table 10.2.1
-            pkt_proto->bssgp_tlli = ntohl(*(uint32_t*)(o+1));
-            ofl_structs_match_put32(pktout, OXM_GPRS_BSSGP_TLLI, pkt_proto->bssgp_tlli);
-            len = 8;
-            o += 8;
-            break;
-        case BSSGP_UL_UNITDATA:
-            // TS 48.018 table 10.2.2
-            pkt_proto->bssgp_tlli = ntohl(*(uint32_t*)(o+1));
-            ofl_structs_match_put32(pktout, OXM_GPRS_BSSGP_TLLI, pkt_proto->bssgp_tlli);
-            len = 8;
-            o += 8;
-            break;
-        default:
-            // unsupported bssgp PDU
-            return 1;
-        }
-        printf("BSSGP tlli=0x%08x\n", pkt_proto->bssgp_tlli);
-        printf("BSSGP pdu_type=%d\n", pkt_proto->bssgp_pdu_type);
-        // rest of the BSSGP is TLV encoded
-        while (o < (uint8_t*)pktin->data + pktin->size) {
-            // skip unknown tlv
-            uint8_t t = *o;
-            uint16_t l;
-            if (*(o+1)&0x80)
-                l = (*(o+1))&0x7f;
-            else
-                l = ntohs(*(uint16_t*)(o+1));
-
-            printf("BSSGP TLV t=%d l=%d\n", t, l);
-
-            if (t == BSSGP_LLC_PDU) {
-                // o points to LLC header
-                // l contains LLC header length + payload
-                len += 3;
-                o += 3;
-                break;
-            }
-
-            len += 2 + l;
-            o += 2 + l;
-        }
-        pkt_proto->bssgp_header_len = len;
-
-        ///////////////////
-        // decode LLC
-        len = 1;
-        // address 1B
-        pkt_proto->llc_sapi = (*o)&0x0f;
-        ofl_structs_match_put8(pktout, OXM_GPRS_LLC_SAPI, pkt_proto->llc_sapi);
-        printf("LLC sapi=%d\n", pkt_proto->llc_sapi);
-        printf("LLC HDR %02x %02x %02x\n", *o, *(o+1), *(o+2));
-        // control max 36B
-        
-        uint8_t control = *(o+1);
-        if (!(control&0x80))
-            pkt_proto->llc_frame_format = LLC_I_FRAME;
-        else if (!(control&0x40))
-            pkt_proto->llc_frame_format = LLC_S_FRAME;
-        else if (!(control&0x20))
-            pkt_proto->llc_frame_format = LLC_UI_FRAME;
-        else
-            pkt_proto->llc_frame_format = LLC_U_FRAME;
-
-        switch (pkt_proto->llc_frame_format) {
-        case LLC_U_FRAME:
-            len += 1;
-            break;
-        case LLC_UI_FRAME:
-            len += 2;
-            break;
-        default:
-            // we're not interrested in S and I frames. 
-            return 1;
-        }
-        //XXX: don't forget 3B trailer (FCS)
-        // N201 is negotiated in LL3, U, XID
-        pkt_proto->llc_header_len = len;
-
-        if (pkt_proto->llc_frame_format != LLC_UI_FRAME ||
-            !(pkt_proto->llc_sapi == LLC_SAPI_LL3 || 
-              pkt_proto->llc_sapi == LLC_SAPI_LL5 ||
-              pkt_proto->llc_sapi == LLC_SAPI_LL9 ||
-              pkt_proto->llc_sapi == LLC_SAPI_LL11))
-            // not an SNDCP frame
-            return 1;
-
-        ///////////////////
-        // SNDCP
-        // TS 44.065 chapter 7.2
-        o += len;
-        len = 1;
-        // nsapi 1B
-        pkt_proto->sndcp_nsapi = (*o)&0x0f;
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_NSAPI, pkt_proto->sndcp_nsapi);
-        printf("SNDCP nsapi=%d\n", pkt_proto->sndcp_nsapi);
-
-        // first_segment
-        pkt_proto->sndcp_first_segment = ((*o)&0x40) ? 1 : 0;
-        printf("SNDCP first_segment=%d\n", pkt_proto->sndcp_first_segment);
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_FIRST_SEGMENT, pkt_proto->sndcp_first_segment);
-        
-        // more_segments
-        pkt_proto->sndcp_more_segments = ((*o)&0x10) ? 1 : 0;
-        printf("SNDCP more_segments=%d\n", pkt_proto->sndcp_more_segments);
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_MORE_SEGMENTS, pkt_proto->sndcp_more_segments);
-
-        // SN-PDU type
-        if ((*o)&0x20) {
-            // SN-UNITDATA
-            len = 4;
-        } else {
-            // SN-DATA
-            len = 3;
-        }
-        pkt_proto->sndcp_header_len = len;
-
-        // compression 1B
-        pkt_proto->sndcp_comp = (*o+1);
-        ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_COMP, pkt_proto->sndcp_comp);
-        printf("SNDCP comp=0x%02x\n", pkt_proto->sndcp_comp);
-
-        //TODO:
-        o += len;
-    }
+    // parse gprs headers
+    nblink_packet_parse_gprs(pktin, pktout, pkt_proto);
 
     return 1;
 }
 
+/**
+ * try to parse GPRS-NS headers in this packet
+ *
+ * all UDP packets are treated as possible GPRS packets, 
+ * only valid headers related to BSSGP/SNDCP/LLC data streams are parsed, when present
+ *
+ * to avoid wasting of CPU power, you can limit packet processing to specific UDP port
+ * by recompiling oflib with -DNBEELINK_GPRS_NS_PORT=23000
+ *
+ * @returns 1 on success
+ */
+int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, struct protocols_std * pkt_proto)
+{
+    uint8_t *o;
+    uint16_t len;
+    struct gprsns_header *gprsns;
+
+    //TODO: check minimmum packet length -- watch out for index out of bounds
+    
+    // every IP/GPRS-NS packet must be wrapped in UDP protocol
+    // if not, stop processing this packet
+    if (!pkt_proto->ipv4 ||
+        pkt_proto->ipv4->ip_proto != IP_TYPE_UDP ||
+        !pkt_proto->udp) 
+        return 1;
+
+#ifdef NBEELINK_GPRS_NS_PORT
+    // if we have GPRS_NS port specified, parse only datagrams sent to given port
+    if (pkt_proto->udp->udp_dst != htons(NBEELINK_GPRS_NS_PORT))
+        return 1;
+#endif
 
 
+    ///////////////////
+    // decode GPRSNS
+    o = (uint8_t*)(pkt_proto->udp) + UDP_HEADER_LEN;
+    pkt_proto->gprsns = gprsns = (struct gprsns_header*)(o);
+    if (gprsns->type != GPRSNS_TYPE_UNITDATA)
+        return 1;
+    // store NS_TYPE and NS_BVCI addresses
+    ofl_structs_match_put8(pktout, OXM_GPRS_NS_TYPE, gprsns->type);
+    ofl_structs_match_put16(pktout, OXM_GPRS_NS_BVCI, ntohs(gprsns->bvci));
+
+    ///////////////////
+    // decode BSSGP
+    o += GPRSNS_HEADER_LEN;
+    pkt_proto->bssgp_pdu_type = *o;
+    switch (pkt_proto->bssgp_pdu_type) {
+    case BSSGP_DL_UNITDATA:
+        // TS 48.018 table 10.2.1
+        pkt_proto->bssgp_tlli = ntohl(*(uint32_t*)(o+1));
+        ofl_structs_match_put32(pktout, OXM_GPRS_BSSGP_TLLI, pkt_proto->bssgp_tlli);
+        len = 8;
+        o += 8;
+        break;
+    case BSSGP_UL_UNITDATA:
+        // TS 48.018 table 10.2.2
+        pkt_proto->bssgp_tlli = ntohl(*(uint32_t*)(o+1));
+        ofl_structs_match_put32(pktout, OXM_GPRS_BSSGP_TLLI, pkt_proto->bssgp_tlli);
+        len = 8;
+        o += 8;
+        break;
+    default:
+        // unsupported bssgp PDU
+        return 1;
+    }
+    printf("BSSGP tlli=0x%08x\n", pkt_proto->bssgp_tlli);
+    printf("BSSGP pdu_type=%d\n", pkt_proto->bssgp_pdu_type);
+    // rest of the BSSGP is TLV encoded
+    while (o < (uint8_t*)pktin->data + pktin->size) {
+        // skip unknown tlv
+        uint8_t t = *o;
+        uint16_t l;
+        if (*(o+1)&0x80)
+            l = (*(o+1))&0x7f;
+        else
+            l = ntohs(*(uint16_t*)(o+1));
+
+        printf("BSSGP TLV t=%d l=%d\n", t, l);
+
+        if (t == BSSGP_LLC_PDU) {
+            // o points to LLC header
+            // l contains LLC header length + payload
+            len += 3;
+            o += 3;
+            break;
+        }
+
+        len += 2 + l;
+        o += 2 + l;
+    }
+    pkt_proto->bssgp_header_len = len;
+
+    ///////////////////
+    // decode LLC
+    len = 1;
+    // address 1B
+    pkt_proto->llc_sapi = (*o)&0x0f;
+    ofl_structs_match_put8(pktout, OXM_GPRS_LLC_SAPI, pkt_proto->llc_sapi);
+    printf("LLC sapi=%d\n", pkt_proto->llc_sapi);
+    printf("LLC HDR %02x %02x %02x\n", *o, *(o+1), *(o+2));
+    // control max 36B
+    
+    uint8_t control = *(o+1);
+    if (!(control&0x80))
+        pkt_proto->llc_frame_format = LLC_I_FRAME;
+    else if (!(control&0x40))
+        pkt_proto->llc_frame_format = LLC_S_FRAME;
+    else if (!(control&0x20))
+        pkt_proto->llc_frame_format = LLC_UI_FRAME;
+    else
+        pkt_proto->llc_frame_format = LLC_U_FRAME;
+
+    switch (pkt_proto->llc_frame_format) {
+    case LLC_U_FRAME:
+        len += 1;
+        break;
+    case LLC_UI_FRAME:
+        len += 2;
+        break;
+    default:
+        // we're not interrested in S and I frames. 
+        return 1;
+    }
+    //XXX: don't forget 3B trailer (FCS)
+    // N201 is negotiated in LL3, U, XID
+    pkt_proto->llc_header_len = len;
+
+    if (pkt_proto->llc_frame_format != LLC_UI_FRAME ||
+        !(pkt_proto->llc_sapi == LLC_SAPI_LL3 || 
+          pkt_proto->llc_sapi == LLC_SAPI_LL5 ||
+          pkt_proto->llc_sapi == LLC_SAPI_LL9 ||
+          pkt_proto->llc_sapi == LLC_SAPI_LL11))
+        // not an SNDCP frame
+        return 1;
+
+    ///////////////////
+    // SNDCP
+    // TS 44.065 chapter 7.2
+    o += len;
+    len = 1;
+    // nsapi 1B
+    pkt_proto->sndcp_nsapi = (*o)&0x0f;
+    ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_NSAPI, pkt_proto->sndcp_nsapi);
+    printf("SNDCP nsapi=%d\n", pkt_proto->sndcp_nsapi);
+
+    // first_segment
+    pkt_proto->sndcp_first_segment = ((*o)&0x40) ? 1 : 0;
+    printf("SNDCP first_segment=%d\n", pkt_proto->sndcp_first_segment);
+    ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_FIRST_SEGMENT, pkt_proto->sndcp_first_segment);
+    
+    // more_segments
+    pkt_proto->sndcp_more_segments = ((*o)&0x10) ? 1 : 0;
+    printf("SNDCP more_segments=%d\n", pkt_proto->sndcp_more_segments);
+    ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_MORE_SEGMENTS, pkt_proto->sndcp_more_segments);
+
+    // SN-PDU type
+    if ((*o)&0x20) {
+        // SN-UNITDATA
+        len = 4;
+    } else {
+        // SN-DATA
+        len = 3;
+    }
+    pkt_proto->sndcp_header_len = len;
+
+    // compression 1B
+    pkt_proto->sndcp_comp = (*o+1);
+    ofl_structs_match_put8(pktout, OXM_GPRS_SNDCP_COMP, pkt_proto->sndcp_comp);
+    printf("SNDCP comp=0x%02x\n", pkt_proto->sndcp_comp);
+
+    //TODO:
+    o += len;
+
+    return 1;
+}
