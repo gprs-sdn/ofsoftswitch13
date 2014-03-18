@@ -11,9 +11,7 @@
 */
 
 #include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include "crc.h"
+#include "crc24.h"
 
 uint32_t crc_table24[256];
 

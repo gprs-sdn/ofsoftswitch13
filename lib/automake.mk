@@ -8,6 +8,8 @@ lib_libopenflow_a_SOURCES = \
 	lib/compiler.h \
 	lib/csum.c \
 	lib/csum.h \
+	lib/crc24.c \
+	lib/crc24.h \
 	lib/daemon.c \
 	lib/daemon.h \
 	lib/dhcp-client.c \
