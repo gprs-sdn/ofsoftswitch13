@@ -34,7 +34,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "datapath.h"
-#include "dp_exp.h"
 #include "packet.h"
 #include "packets.h"
 #include "oflib/ofl.h"
@@ -48,120 +47,127 @@
 #include "openflow/gprs-sdn-ext.h"
 #include "openflow/openflow-ext.h"
 #include "openflow/nicira-ext.h"
+#include "lib/csum.h"
+#include "lib/crc24.h"
 #include "vlog.h"
-#include "crc24.h"
 #define LOG_MODULE VLM_dp_exp
 
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
+#include "dp_exp.h"
 
-void
-dp_exp_action_hello_world() {
-	printf("ahoj svet\n");
-	fflush(stdout);
-}
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 
 //TODO
 void
 dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    struct gprsns_header *push_gprsns;
+    struct ofl_exp_gprs_sdn_act_push_gprsns *exp = (struct ofl_exp_gprs_sdn_act_push_gprsns *) act;
+    int llc_payload_len, o;
+    uint32_t crc24;
+    uint8_t *llc, *sndcp, *bssgp, *gprsns, *llc_crc;
+    uint8_t sizeof_data_to_insert, is_word = 0;
+
     //validate handle
     packet_handle_std_validate(pkt->handle_std);
     
-    struct gprsns_header *push_gprsns;
-    struct ofl_exp_gprs_sdn_act_push_gprsns *exp = (struct ofl_exp_gprs_sdn_act_push_gprsns *) act;
-    uint8_t sizeof_data_to_insert;
-    uint32_t LLC_payload;
-    uint8_t LLC_PDU_len_2B = 0;
-    uint32_t LLC_crc;
-
-    sizeof_data_to_insert = GPRSNS_HEADER_LEN + 12 /* BSSGP - LLC_PDU */ + 2 /* LLC_PDU TL */ + 3 /* LLC CRC*/ + 1 /* SAPI */ + 2 /*UI format*/ + 1 /* NSAPI */ + 3 /*SNDCP comp + mode + N-PDU*/;//XXX
+    sizeof_data_to_insert = GPRSNS_HEADER_LEN 
+        + 12  // BSSGP - LLC_PDU 
+        + 2   // LLC_PDU TL 
+        + 3   // LLC CRC
+        + 1   // SAPI 
+        + 2   // UI format
+        + 1   // NSAPI 
+        + 3;  // SNDCP comp + mode + N-PDU
     
-    //if (LLC_PDU_length > 127) increment sizeof_data_to_insert by one because length in LLC_PDU will be 2B
+    // if (LLC_PDU_length > 127) increment sizeof_data_to_insert by one 
+    // because length in LLC_PDU will be 2B
     if (pkt->buffer->size > 127) {
-        
         sizeof_data_to_insert++;
-        LLC_PDU_len_2B = 1;
+        is_word = 1;
     }
 
-    //headroom has enough space
     if (ofpbuf_headroom(pkt->buffer) >= sizeof_data_to_insert) {
-        
-        pkt->buffer->data = (uint8_t *) pkt->buffer->data - sizeof_data_to_insert + 3 /* LLC CRC is at the end of the packet*/;
+        // if headroom has enough space
+        // +3 -- LLC CRC is at the end of the packet
+        pkt->buffer->data = (uint8_t *) pkt->buffer->data - sizeof_data_to_insert + 3; 
         pkt->buffer->size += sizeof_data_to_insert; 
         
-        //memmove not necessary                 
+        // memmove not necessary                 
         push_gprsns = (struct gprsns_header *) pkt->buffer->data; 
-
     }
-
-    //headroom is full, we use tailroom of the packet
     else {
-        //Note: ofpbuf_put_uninit might relocate the whole packet
+        // otherwise, headroom is full. we use tailroom of the packet
+        //XXX: ofpbuf_put_uninit might relocate the whole packet
         ofpbuf_put_uninit(pkt->buffer, sizeof_data_to_insert);        
         push_gprsns = (struct gprsns_header *) pkt->buffer->data;                
         
-        //push data to create space for GPRSNS header
+        // push data to create space for GPRSNS header
         memmove((uint8_t *)push_gprsns + sizeof_data_to_insert, push_gprsns, pkt->buffer->size);                            
-        
         //FIXME XXX TODO not sure if correct
         //pkt->buffer->size += sizeof_data_to_insert;    
-        
     }
     
     push_gprsns->type = GPRSNS_TYPE_UNITDATA;
     push_gprsns->control = 0x00; //wireshark XX
     push_gprsns->bvci = exp->bvci;
-    
      
-    uint8_t *llc, *sndcp, *bssgp, *gprsns;
-    gprsns = (uint8_t *) pkt->buffer->data;
+    gprsns = (uint8_t*)pkt->buffer->data;
     bssgp = gprsns+4;                       
     
     // DL-UNITDATA
     bssgp[0] = BSSGP_DL_UNITDATA;
-    *((uint32_t*) bssgp+1) = htonl(exp->tlli); // a mozno nie htnol, lebo ti ich ryu dalo v network orderi a nik ti ich neparsoval na host ordera
+    // a mozno nie htnol, lebo ti ich ryu dalo v network orderi a nik ti ich neparsoval na host ordera
+    *((uint32_t*) bssgp+1) = htonl(exp->tlli); 
     bssgp[7] = 0x04; //QoS - 3B
     bssgp[8] = 0x16; //PDU Lifetime - 4B
     bssgp[9] = 0x82; //ext+length - wireshark
     bssgp[10] = 0x03; //constant
     bssgp[11] = 0xe8; //constant
 
-    int o = 12;
+    o = 12;
     // LLC TLV
     bssgp[o] = BSSGP_LLC_PDU; //LLC TLV T
     
     //LLC TLV L
-    if (LLC_PDU_len_2B) {
-        //the part bigger than 255 goes to the first byte, remainder is stored in the secong byte of length
-        bssgp[o + 1] = (pkt->buffer->size - GPRSNS_HEADER_LEN - 15/* BSSGP including LLC_PDU T&L*/) / 256;  //LLC_PDU length equals to size of packet buffer minus the BSSGP and GPRSNS headers, because they are not LLC payload and are located before the LLC header.
-        bssgp[o + 2] = (pkt->buffer->size - GPRSNS_HEADER_LEN -15) % 256;
-        LLC_payload = pkt->buffer->size - GPRSNS_HEADER_LEN;
-        o = o + 2;
+    if (is_word) {
+        // LLC_PDU length equals to size of packet buffer minus the 
+        // BSSGP and GPRSNS headers, because they are not LLC payload 
+        // and are located before the LLC header.
+        llc_payload_len = pkt->buffer->size - GPRSNS_HEADER_LEN - 15;
+        *((uint16_t*)bssgp[o+1]) = htons(llc_payload_len);
+        o += 2;
+    } else {
+        // if sizeof LLC_PDU length is less than or equal to 127 we set the 
+        // first bit of len to 1 
+        llc_payload_len = pkt->buffer->size - GPRSNS_HEADER_LEN - 14;
+        bssgp[o+1] = llc_payload_len;
+        bssgp[o+1] |= 0x80;
+        o++;
     }
 
-    else {
-        //if sizeof LLC_PDU length is less than or equal to 127 we set the first bit of len to 1 - we add 128 to length
-        bssgp[o + 1] = pkt->buffer->size - GPRSNS_HEADER_LEN - 14 + 128; 
-        LLC_payload = pkt->buffer->size - GPRSNS_HEADER_LEN - 14;
-        o++;
-    }    
     llc = bssgp + o; 
-        
     llc[0] = exp->sapi; 
     llc[1] = 0xc0;
-    llc[2] = 0x01;//XXX
+    llc[2] = 0x01;
+    //XXX:
     
-     
-    sndcp = llc + 3;//SAPI + UI format
-    
+    //SAPI + UI format
+    sndcp = llc + 3; 
     sndcp[0] = 0x60 | exp->nsapi;
     sndcp[1] = 0x00; //no compression
     sndcp[2] = 0x00; //unacknowledge mode
     sndcp[3] = 0x00; //FIXME TODO N-PDU nubmers should be incremented in each SNDCP header!!!
     
-    LLC_crc = htonl(crc_compute24(llc, LLC_payload,0));//FIXME TODO XXX
+    crc24 = crc_compute24(llc, llc_payload_len,0);
+    llc_crc = llc + llc_payload_len;
     
-    *((uint8_t *)(push_gprsns + pkt->buffer->size - 3)) =  LLC_crc % 256;
+    llc_crc[0] = (crc24 >> 16) & 0xff;
+    llc_crc[1] = (crc24 >> 8) & 0xff;
+    llc_crc[2] = (crc24) & 0xff;
+    
+    //TODO: porovnat vystup.. aj s wiresharkom
+    printf("crc24=%08x\n", crc24);
+    printf("llc_crc= %02x %02x %02x\n", llc_crc[0], llc_crc[1], llc_crc[2]);
 
     pkt->handle_std->valid = false;
 }
@@ -206,10 +212,11 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
 
 void
 dp_exp_action_push_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){ 
-    packet_handle_std_validate(pkt->handle_std);
     struct ip_header *push_ip;
     struct ofl_exp_gprs_sdn_act_push_ip *exp = (struct ofl_exp_gprs_sdn_act_push_ip *) act;
     
+    packet_handle_std_validate(pkt->handle_std);
+
     //if there's enough space in headroom
     if (ofpbuf_headroom(pkt->buffer) >= IP_HEADER_LEN) {
         
@@ -276,9 +283,10 @@ dp_exp_action_pop_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act
 
 void
 dp_exp_action_push_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    packet_handle_std_validate(pkt->handle_std);
     struct udp_header *push_udp;
     struct ofl_exp_gprs_sdn_act_push_udp *exp = (struct ofl_exp_gprs_sdn_act_push_udp *) act;
+
+    packet_handle_std_validate(pkt->handle_std);
 
     if (ofpbuf_headroom(pkt->buffer) >= UDP_HEADER_LEN){
         
@@ -330,15 +338,10 @@ dp_exp_action_pop_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *ac
 
 void
 dp_exp_action(struct packet * pkt, struct ofl_action_experimenter *act) {
-	uint16_t subtype;
-	uint8_t *data;
-	
-	printf("experimenter action - vendor=%d, len=%d\n", act->experimenter_id, act->header.len);
 	switch(act->experimenter_id) {
 	case GPRS_SDN_VENDOR_ID: {
 		struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
 		switch (exp->subtype) {
-		//TODO: more subtypes
 		case GPRS_SDN_PUSH_GPRSNS:
             return dp_exp_action_push_gprsns(pkt, exp);
         case GPRS_SDN_POP_GPRSNS:
@@ -351,8 +354,7 @@ dp_exp_action(struct packet * pkt, struct ofl_action_experimenter *act) {
             return dp_exp_action_push_udp(pkt, exp);
         case GPRS_SDN_POP_UDP:
             return dp_exp_action_pop_udp(pkt, exp);
-        case GPRS_SDN_HELLO:
-            return dp_exp_action_hello_world();
+		//TODO: more subtypes
 		default:
 			VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
 		}
