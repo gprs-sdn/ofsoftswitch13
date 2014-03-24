@@ -44,8 +44,10 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 				ofl = (struct ofl_exp_gprs_sdn_act_push_gprsns*) malloc(sizeof(*ofl));
 				//TODO naparsovat zvysok ofl struktury
 				ofl->subtype = ntohs(exp->subtype);
-				ofl->tlli = ntohs(exp2->tlli);
-				ofl->nsapi = exp2->nsapi;
+				ofl->bvci = ntohs(exp2->bvci);
+                ofl->tlli = ntohl(exp2->tlli);
+				ofl->sapi = exp2->sapi;
+                ofl->nsapi = exp2->nsapi;
 				//TODO:
 				*dst = (struct ofl_action_header*) ofl;
 			}

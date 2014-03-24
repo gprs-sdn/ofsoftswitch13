@@ -20,9 +20,11 @@ struct ofl_exp_gprs_sdn_act_push_gprsns {
     struct ofl_action_experimenter header;
 
     uint16_t subtype;
-
-    uint16_t tlli;
-    uint16_t nsapi;
+    
+    uint16_t bvci;
+    uint32_t tlli;
+    uint8_t sapi;
+    uint8_t nsapi;
 };
 
 struct ofl_exp_gprs_sdn_act_push_ip {

@@ -38,7 +38,7 @@ struct gprs_sdn_action_push_gprsns {
     uint16_t subtype;               /* NXAST_RESUBMIT. */
     uint16_t bvci;                  /* BVCI */
     uint32_t tlli;					/* TLLI */
-    uint8_t sapi;					/* NSAPI */
+    uint8_t sapi;					/* SAPI */
     uint8_t nsapi;					/* NSAPI */
     uint8_t pad[6];
 };
@@ -64,8 +64,10 @@ struct gprs_sdn_action_push_udp {
     uint16_t dstport;		/* DESTINATION PORT */
     uint16_t srcport;		/* SOURCE PORT */
     uint8_t pad[2];
+    uint32_t dstip;         /* DESTINATION IP NEEDED FOR CRC COMPUTATION*/
+    uint32_t srcip;         /* SOURCE IP NEEDED FOR CEC COMPUTATION */
 };
-OFP_ASSERT(sizeof(struct gprs_sdn_action_push_udp) == 16);
+OFP_ASSERT(sizeof(struct gprs_sdn_action_push_udp) == 24);
 
 struct gprs_sdn_action_header {
     uint16_t type;                  /* OFPAT_VENDOR. */
