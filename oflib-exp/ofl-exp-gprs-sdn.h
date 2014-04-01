@@ -20,29 +20,22 @@ struct ofl_exp_gprs_sdn_act_push_gprsns {
     struct ofl_action_experimenter header;
 
     uint16_t subtype;
-    
-    uint16_t bvci;
-    uint32_t tlli;
-    uint8_t sapi;
-    uint8_t nsapi;
+
+    uint16_t bvci;                  /* BVCI */
+    uint32_t tlli;					/* TLLI */
+    uint8_t sapi;					/* NSAPI */
+    uint8_t nsapi;					/* NSAPI */
 };
 
-struct ofl_exp_gprs_sdn_act_push_ip {
-    struct ofl_action_experimenter header;
-    
-    uint16_t subtype;
-
-    uint32_t dstip;
-    uint32_t srcip;
-};
-
-struct ofl_exp_gprs_sdn_act_push_udp {
+struct ofl_exp_gprs_sdn_act_push_udpip {
     struct ofl_action_experimenter header;
     
     uint16_t subtype;
 
     uint16_t dstport;
     uint16_t srcport;
+    uint32_t dstip;
+    uint32_t srcip;
 };
 
 int

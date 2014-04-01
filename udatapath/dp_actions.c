@@ -601,6 +601,7 @@ push_mpls(struct packet *pkt, struct ofl_action_push *act) {
             new_snap = snap == NULL ? NULL
                                    : (struct snap_header *)((uint8_t *)new_eth
                                         + ETH_HEADER_LEN + MPLS_HEADER_LEN + LLC_HEADER_LEN);
+            //FIXME: ETH_HEADER_LEN should be eth_size?
             push_mpls = (struct mpls_header *)((uint8_t *)new_eth + ETH_HEADER_LEN);
 
             // push data to create space for new MPLS

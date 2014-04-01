@@ -122,7 +122,7 @@ ofl_exp_msg_to_string(struct ofl_msg_experimenter *msg) {
             size_t str_size;
             FILE *stream = open_memstream(&str, &str_size);
             OFL_LOG_WARN(LOG_MODULE, "Trying to convert to string unknown EXPERIMENTER message (%u).", msg->experimenter_id);
-            fprintf(stream, "exp{id=\"0x%"PRIx32"\"}", msg->experimenter_id);
+            fprintf(stream, "{id=\"0x%"PRIx32"\"}", msg->experimenter_id);
             fclose(stream);
             return str;
         }
@@ -210,7 +210,7 @@ ofl_exp_act_to_string(struct ofl_action_header *act) {
             size_t str_size;
             FILE *stream = open_memstream(&str, &str_size);
             OFL_LOG_WARN(LOG_MODULE, "Trying to convert to string unknown EXPERIMENTER action (%u).", exp->experimenter_id);
-            fprintf(stream, "exp{id=\"0x%"PRIx32"\"}", exp->experimenter_id);
+            fprintf(stream, "{id=\"0x%"PRIx32"\"}", exp->experimenter_id);
             fclose(stream);
             return str;
         }

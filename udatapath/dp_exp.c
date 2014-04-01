@@ -29,6 +29,7 @@
  *
  * Author: Zoltán Lajos Kis <zoltan.lajos.kis@ericsson.com>
  * Author: Tibor Hirjak <hirjak.tibor@gmail.com>
+ * Author: Jan Skalny <jan@skalny.sk>
  */
 
 #include <stdlib.h>
@@ -56,128 +57,120 @@
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
-
-//TODO
 void
 dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    struct gprsns_header *push_gprsns;
+    struct eth_header  *eth,  *new_eth;
+    struct snap_header *snap, *new_snap;
+    struct gprsns_header *gprsns;
     struct ofl_exp_gprs_sdn_act_push_gprsns *exp = (struct ofl_exp_gprs_sdn_act_push_gprsns *) act;
-    int llc_payload_len, o;
+    size_t llc_size, payload_size, eth_size, gprsns_size, o;
     uint32_t crc24;
-    uint8_t *llc, *sndcp, *bssgp, *gprsns, *llc_crc;
-    uint8_t sizeof_data_to_insert, is_word = 0;
+    uint8_t *llc, *sndcp, *bssgp, *llc_crc;
+    uint8_t is_word = 0;
 
-    //validate handle
     packet_handle_std_validate(pkt->handle_std);
-    
-    sizeof_data_to_insert = GPRSNS_HEADER_LEN 
-        + 12  // BSSGP - LLC_PDU 
-        + 2   // LLC_PDU TL 
-        + 3   // LLC CRC
-        + 1   // SAPI 
-        + 2   // UI format
-        + 1   // NSAPI 
-        + 3;  // SNDCP comp + mode + N-PDU
-    
-    // if (LLC_PDU_length > 127) increment sizeof_data_to_insert by one 
+
+    // we need to have an existing ethernet header...
+    if (!pkt->handle_std->proto->eth) {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute PUSH_GPRSNS action on packet with no eth.");
+        return;
+    }
+
+    eth = pkt->handle_std->proto->eth;
+    snap = pkt->handle_std->proto->eth_snap;
+
+    eth_size = snap == NULL
+                   ? ETH_HEADER_LEN
+                   : ETH_HEADER_LEN + LLC_HEADER_LEN + SNAP_HEADER_LEN;
+
+    payload_size = pkt->buffer->size - eth_size;
+    llc_size = LLC_HEADER_LEN + SNDCP_HEADER_LEN + payload_size + LLC_TRAILER_LEN;
+    gprsns_size = GPRSNS_HEADER_LEN + 14 + llc_size - payload_size;
+   
+    // if (LLC_PDU_length > 127) increment gprsns_size by one 
     // because length in LLC_PDU will be 2B
-    if (pkt->buffer->size > 127) {
-        sizeof_data_to_insert++;
+    if (payload_size > 127) {
+        gprsns_size++;
         is_word = 1;
     }
 
-    if (ofpbuf_headroom(pkt->buffer) >= sizeof_data_to_insert) {
+    if (ofpbuf_headroom(pkt->buffer) >= gprsns_size) {
         // if headroom has enough space
-        // +3 -- LLC CRC is at the end of the packet
-        pkt->buffer->data = (uint8_t *) pkt->buffer->data - sizeof_data_to_insert + 3; 
-        pkt->buffer->size += sizeof_data_to_insert; 
-        
-        // memmove not necessary                 
-        push_gprsns = (struct gprsns_header *) pkt->buffer->data; 
-    }
-    else {
+        // put everything in front of existing packet
+        pkt->buffer->data = (uint8_t *) pkt->buffer->data - gprsns_size; 
+        pkt->buffer->size += gprsns_size; 
+        gprsns = (struct gprsns_header *) ((uint8_t*)pkt->buffer->data + eth_size); 
+        // move ethertnet header, to make enough space for GPRS-NS headers
+        memmove(pkt->buffer->data, eth, eth_size);
+        // move payload to make enough space for LLC trailer 
+        memmove((uint8_t *)gprsns + gprsns_size - 3, (uint8_t*)eth + eth_size, payload_size);
+    } else {
         // otherwise, headroom is full. we use tailroom of the packet
-        //XXX: ofpbuf_put_uninit might relocate the whole packet
-        ofpbuf_put_uninit(pkt->buffer, sizeof_data_to_insert);        
-        push_gprsns = (struct gprsns_header *) pkt->buffer->data;                
-        
         // push data to create space for GPRSNS header
-        memmove((uint8_t *)push_gprsns + sizeof_data_to_insert, push_gprsns, pkt->buffer->size);                            
-        //FIXME XXX TODO not sure if correct
-        //pkt->buffer->size += sizeof_data_to_insert;    
+        ofpbuf_put_uninit(pkt->buffer, gprsns_size);        
+        gprsns = (struct gprsns_header *) ((uint8_t*)pkt->buffer->data + eth_size); 
+        // move payload to make space for new GPRS-NS headers
+        memmove((uint8_t *)gprsns + gprsns_size - 3, (uint8_t*)eth + eth_size, payload_size);
     }
-    
-    push_gprsns->type = GPRSNS_TYPE_UNITDATA;
-    push_gprsns->control = 0x00; //wireshark XX
-    push_gprsns->bvci = exp->bvci;
+
+    // GPRS-NS header
+    gprsns->type = GPRSNS_TYPE_UNITDATA;
+    gprsns->control = 0x00; 
+    gprsns->bvci = htons(exp->bvci);
      
-    gprsns = (uint8_t*)pkt->buffer->data;
-    bssgp = gprsns+4;                       
-    
+    // BSSGP header
+    bssgp = ((uint8_t*)gprsns) + GPRSNS_HEADER_LEN;          
     // DL-UNITDATA
     bssgp[0] = BSSGP_DL_UNITDATA;
-    // a mozno nie htnol, lebo ti ich ryu dalo v network orderi a nik ti ich neparsoval na host ordera
-    *((uint32_t*) bssgp+1) = htonl(exp->tlli); 
+    *((uint32_t*)(bssgp+1)) = htonl(exp->tlli); 
     bssgp[7] = 0x04; //QoS - 3B
     bssgp[8] = 0x16; //PDU Lifetime - 4B
     bssgp[9] = 0x82; //ext+length - wireshark
     bssgp[10] = 0x03; //constant
     bssgp[11] = 0xe8; //constant
 
-    o = 12;
     // LLC TLV
-    bssgp[o] = BSSGP_LLC_PDU; //LLC TLV T
-    
+    bssgp[12] = BSSGP_LLC_PDU; //LLC TLV T
+
     //LLC TLV L
     if (is_word) {
-        // LLC_PDU length equals to size of packet buffer minus the 
-        // BSSGP and GPRSNS headers, because they are not LLC payload 
-        // and are located before the LLC header.
-        llc_payload_len = pkt->buffer->size - GPRSNS_HEADER_LEN - 15;
-        *((uint16_t*)bssgp[o+1]) = htons(llc_payload_len);
-        o += 2;
+        *((uint16_t*)(bssgp+13)) = htons(llc_size);
+        llc = bssgp + 15;
     } else {
-        // if sizeof LLC_PDU length is less than or equal to 127 we set the 
+        // if gprsns_size LLC_PDU length is less than or equal to 127 we set the 
         // first bit of len to 1 
-        llc_payload_len = pkt->buffer->size - GPRSNS_HEADER_LEN - 14;
-        bssgp[o+1] = llc_payload_len;
-        bssgp[o+1] |= 0x80;
-        o++;
+        bssgp[13] = 0x80 | (uint8_t)llc_size;
+        llc = bssgp + 14; 
     }
 
-    llc = bssgp + o; 
+    // LLC header
     llc[0] = exp->sapi; 
     llc[1] = 0xc0;
     llc[2] = 0x01;
-    //XXX:
     
-    //SAPI + UI format
+    // SNDCP header
     sndcp = llc + 3; 
     sndcp[0] = 0x60 | exp->nsapi;
     sndcp[1] = 0x00; //no compression
     sndcp[2] = 0x00; //unacknowledge mode
     sndcp[3] = 0x00; //FIXME TODO N-PDU nubmers should be incremented in each SNDCP header!!!
     
-    crc24 = crc_compute24(llc, llc_payload_len,0);
-    llc_crc = llc + llc_payload_len;
-    
-    llc_crc[0] = (crc24 >> 16) & 0xff;
-    llc_crc[1] = (crc24 >> 8) & 0xff;
-    llc_crc[2] = (crc24) & 0xff;
-    
-    //TODO: porovnat vystup.. aj s wiresharkom
-    printf("crc24=%08x\n", crc24);
-    printf("llc_crc= %02x %02x %02x\n", llc_crc[0], llc_crc[1], llc_crc[2]);
+    crc24 = crc_compute24(llc, llc_size-LLC_TRAILER_LEN, 0);
 
+    // LLC trailer
+    llc_crc = llc + llc_size - LLC_TRAILER_LEN;
+    llc_crc[2] = (crc24 >> 16) & 0xff;
+    llc_crc[1] = (crc24 >> 8) & 0xff;
+    llc_crc[0] = (crc24) & 0xff;
+    
     pkt->handle_std->valid = false;
 }
 
 
 void
 dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    //validate handle
     packet_handle_std_validate(pkt->handle_std);
-    //verify packets
+
     if(pkt->handle_std->proto->gprsns != NULL) {
         struct protocols_std *proto = pkt->handle_std->proto;
         struct eth_header *eth = pkt->handle_std->proto->eth;
@@ -203,51 +196,65 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
 
         //set handle to false
         pkt->handle_std->valid = false;
-    }
-    //else 
-    else {
+    } else {
         VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_GPRSNS action on packet with no gprsns.");
     }
 }
 
 void
-dp_exp_action_push_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){ 
+dp_exp_action_push_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){ 
+    struct eth_header  *eth,  *new_eth;
+    struct snap_header *snap, *new_snap;
+    struct udp_header *push_udp;
     struct ip_header *push_ip;
-    struct ofl_exp_gprs_sdn_act_push_ip *exp = (struct ofl_exp_gprs_sdn_act_push_ip *) act;
+    struct ofl_exp_gprs_sdn_act_push_udpip *exp = (struct ofl_exp_gprs_sdn_act_push_udpip *) act;
+    size_t eth_size, new_header_size, payload_size;
     
     packet_handle_std_validate(pkt->handle_std);
 
-    //if there's enough space in headroom
-    if (ofpbuf_headroom(pkt->buffer) >= IP_HEADER_LEN) {
-        
-        pkt->buffer->data = (uint8_t *) pkt->buffer->data - IP_HEADER_LEN;
-        pkt->buffer->size += IP_HEADER_LEN;
-        
-        //memmove not necessary 
-         
-        push_ip = (struct ip_header *) pkt->buffer->data; 
-     }   
-    
-    //headroom full, use the tailroom of the packet
-    else {
-        //Note: ofpbuf_put_uninit might relocate the whole packet
-        ofpbuf_put_uninit(pkt->buffer, IP_HEADER_LEN);
-        
-        push_ip = (struct ip_header *) pkt->buffer->data;
-
-        //push data to create space for IP header
-        memmove((uint8_t *)push_ip + IP_HEADER_LEN, push_ip, pkt->buffer->size);
-
-        //FIXME XXX TODO not sure if correct
-        //pkt->buffer->size += IP_HEADER_LEN;
+    // we need to have an existing ethernet header...
+    if (!pkt->handle_std->proto->eth) {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute PUSH_IP action on packet with no eth.");
+        return;
     }
-   
-    //fill IP header with correct values
-    push_ip->ip_ihl_ver = IP_IHL_VER(4,5);
-    
-    push_ip->ip_tos = 0; //XXX: map to GRE tunnel
-    push_ip->ip_tot_len = pkt->buffer->size;
-    push_ip->ip_id = 0; //TODO: XXX: FIXME!
+
+    eth = pkt->handle_std->proto->eth;
+    snap = pkt->handle_std->proto->eth_snap;
+
+    eth_size = snap == NULL
+                   ? ETH_HEADER_LEN
+                   : ETH_HEADER_LEN + LLC_HEADER_LEN + SNAP_HEADER_LEN;
+    //TODO: pozriet ci je velkost spravna.. asi treba radsej pkt->handle_std->nieco
+    payload_size = pkt->buffer->size - eth_size;
+
+    new_header_size = IP_HEADER_LEN + UDP_HEADER_LEN;
+
+    if (ofpbuf_headroom(pkt->buffer) >= new_header_size) {
+        // if there's enough space in headroom
+        // move ethernet header, to make enough space for IP and UDP headers
+        pkt->buffer->data = (uint8_t *) pkt->buffer->data - new_header_size;
+        pkt->buffer->size += new_header_size;
+        memmove(pkt->buffer->data, eth, eth_size);
+        push_ip = (struct ip_header *) ((uint8_t*)pkt->buffer->data + eth_size);  
+        push_udp = (struct udp_header *) ((uint8_t*)push_ip + IP_HEADER_LEN);
+    } else {
+        // headroom full, use the tailroom of the packet
+        // move entire payload to make space for new IP and UDP headers
+        ofpbuf_put_uninit(pkt->buffer, new_header_size);
+        push_ip = (struct ip_header *) ((uint8_t*)pkt->buffer->data + eth_size);  
+        push_udp = (struct udp_header *) ((uint8_t*)push_ip + IP_HEADER_LEN);
+        memmove((uint8_t *)push_ip + new_header_size, push_ip, pkt->buffer->size - eth_size);
+    }
+ 
+    //TODO: new_eth and new_snap headers
+    // set ethernet type 0x0800
+
+    // fill IP header with correct values
+    memset(push_ip, 0, IP_HEADER_LEN);
+    push_ip->ip_ihl_ver = IP_IHL_VER(5, IP_VERSION);
+    push_ip->ip_tos = 0; //XXX: QoS in here, if something sits between us and bss
+    push_ip->ip_tot_len = htons(payload_size + UDP_HEADER_LEN + IP_HEADER_LEN);
+    push_ip->ip_id = 0; //TODO: FIXME!
     push_ip->ip_frag_off= 0;
     push_ip->ip_ttl = 255;
     push_ip->ip_proto = IP_TYPE_UDP; 
@@ -256,125 +263,76 @@ dp_exp_action_push_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *ac
     push_ip->ip_dst = exp->dstip; 
     push_ip->ip_csum = csum(push_ip, IP_HEADER_LEN);
     
-    pkt->handle_std->valid = false;
-}
-
-void
-dp_exp_action_pop_ip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    packet_handle_std_validate(pkt->handle_std);
-    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL) {
-        struct eth_header *eth = pkt->handle_std->proto->eth;
-        struct ip_header *ip = pkt->handle_std->proto->ipv4;
-        size_t move_size;
-       
-        pkt->buffer->data = (uint8_t *)pkt->buffer->data + (4 * IP_IHL(ip->ip_ihl_ver));
-        pkt->buffer->size -= (4 * IP_IHL(ip->ip_ihl_ver));
-       
-        
-        move_size = (uint8_t *) ip - (uint8_t *) eth;
-        memmove(pkt->buffer->data, eth, move_size);
-        pkt->handle_std->valid = false;
-    }
-
-    else {
-        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_IP action on packet with no ip.");
-    }
-}
-
-void
-dp_exp_action_push_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    struct udp_header *push_udp;
-    struct ofl_exp_gprs_sdn_act_push_udp *exp = (struct ofl_exp_gprs_sdn_act_push_udp *) act;
-
-    packet_handle_std_validate(pkt->handle_std);
-
-    if (ofpbuf_headroom(pkt->buffer) >= UDP_HEADER_LEN){
-        
-        pkt->buffer->data = (uint8_t *) pkt->buffer->data - UDP_HEADER_LEN;
-        pkt->buffer->size += UDP_HEADER_LEN;
-
-        push_udp = (struct udp_header *) pkt->buffer->data;
-    }
-
-    else {
-        
-        ofpbuf_put_uninit(pkt->buffer, UDP_HEADER_LEN);
-        
-        push_udp = (struct udp_header *) pkt->buffer->data; 
-    
-        memmove((uint8_t *)push_udp + UDP_HEADER_LEN, push_udp, pkt->buffer->size);
-        //FIXME XXX TODO
-        //pkt->buffer->size += UDP_HEADER_LEN;
-    }
-    //fill UDP header with correct values
-    push_udp->udp_src = exp->srcport;
-    push_udp->udp_dst = exp->dstport;
-    push_udp->udp_len = pkt->buffer->size;
+    // fill UDP header with correct values
+    memset(push_udp, 0, UDP_HEADER_LEN);
+    push_udp->udp_src = htons(exp->srcport);
+    push_udp->udp_dst = htons(exp->dstport);
+    push_udp->udp_len = htons(payload_size + UDP_HEADER_LEN);
     push_udp->udp_csum = 0; //optional, so we set it to zero
 
     pkt->handle_std->valid = false;
 }
 
 void
-dp_exp_action_pop_udp(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    packet_handle_std_validate(pkt->handle_std);
-    if(pkt->handle_std->proto->eth != NULL && pkt->handle_std->proto->ipv4 != NULL && pkt->handle_std->proto->udp != NULL) {
-        struct eth_header *eth = pkt->handle_std->proto->eth;
-        struct udp_header *udp = pkt->handle_std->proto->udp;
-        size_t move_size;
-        
-        pkt->buffer->data = (uint8_t *)pkt->buffer->data + UDP_HEADER_LEN;
-        pkt->buffer->size -= UDP_HEADER_LEN;
-        
-        move_size = (uint8_t *) udp - (uint8_t *) eth;
-        memmove(pkt->buffer->data, eth, move_size);
-        pkt->handle_std->valid = false;     
-    }
+dp_exp_action_pop_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+    struct eth_header *eth; 
+    struct ip_header *ip; 
+    struct udp_header *udp; 
+    size_t move_size;
 
-    else {
-        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_UDP action on packet with no udp.");
+    packet_handle_std_validate(pkt->handle_std);
+ 
+    eth = pkt->handle_std->proto->eth;
+    ip = pkt->handle_std->proto->ipv4;
+    udp = pkt->handle_std->proto->udp;
+
+    if (!eth || !ip || !udp) {
+        VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute POP_UDPIP action on packet with no ip and udp.");
+        return;
     }
+      
+    pkt->buffer->data = (uint8_t *)pkt->buffer->data + (4 * IP_IHL(ip->ip_ihl_ver)) + UDP_HEADER_LEN;
+    pkt->buffer->size -= (4 * IP_IHL(ip->ip_ihl_ver)) - UDP_HEADER_LEN;
+   
+    move_size = (uint8_t *) ip - (uint8_t *) eth;
+    memmove(pkt->buffer->data, eth, move_size);
+    pkt->handle_std->valid = false;
 }
 
 void
 dp_exp_action(struct packet * pkt, struct ofl_action_experimenter *act) {
-	switch(act->experimenter_id) {
-	case GPRS_SDN_VENDOR_ID: {
-		struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
-		switch (exp->subtype) {
-		case GPRS_SDN_PUSH_GPRSNS:
+    switch(act->experimenter_id) {
+    case GPRS_SDN_VENDOR_ID: {
+        struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
+        switch (exp->subtype) {
+        case GPRS_SDN_PUSH_GPRSNS:
             return dp_exp_action_push_gprsns(pkt, exp);
         case GPRS_SDN_POP_GPRSNS:
             return dp_exp_action_pop_gprsns(pkt, exp);
-        case GPRS_SDN_PUSH_IP:
-            return dp_exp_action_push_ip(pkt, exp);
-        case GPRS_SDN_POP_IP:
-            return dp_exp_action_pop_ip(pkt, exp);
-        case GPRS_SDN_PUSH_UDP:
-            return dp_exp_action_push_udp(pkt, exp);
-        case GPRS_SDN_POP_UDP:
-            return dp_exp_action_pop_udp(pkt, exp);
-		//TODO: more subtypes
-		default:
-			VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
-		}
-		return;
-		}
-	}
+        case GPRS_SDN_PUSH_UDPIP:
+            return dp_exp_action_push_udpip(pkt, exp);
+        case GPRS_SDN_POP_UDPIP:
+            return dp_exp_action_pop_udpip(pkt, exp);
+        default:
+            VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown GPRS SDN action (%u).", act->experimenter_id);
+        }
+        return;
+        }
+    }
 
-	VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown experimenter action (%u).", act->experimenter_id);
+    VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown experimenter action (%u).", act->experimenter_id);
 }
 
 void
 dp_exp_inst(struct packet *pkt UNUSED, struct ofl_instruction_experimenter *inst) {
-	VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown experimenter instruction (%u).", inst->experimenter_id);
+    VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to execute unknown experimenter instruction (%u).", inst->experimenter_id);
 }
 
 ofl_err
 dp_exp_stats(struct datapath *dp UNUSED,
                                   struct ofl_msg_multipart_request_experimenter *msg,
                                   const struct sender *sender UNUSED) {
-	VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to handle unknown experimenter stats (%u).", msg->experimenter_id);
+    VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to handle unknown experimenter stats (%u).", msg->experimenter_id);
     return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_EXPERIMENTER);
 }
 
@@ -385,7 +343,7 @@ dp_exp_message(struct datapath *dp,
                                const struct sender *sender) {
 
     switch (msg->experimenter_id) {
-		case (OPENFLOW_VENDOR_ID): {
+        case (OPENFLOW_VENDOR_ID): {
             struct ofl_exp_openflow_msg_header *exp = (struct ofl_exp_openflow_msg_header *)msg;
 
             switch(exp->type) {
@@ -399,7 +357,7 @@ dp_exp_message(struct datapath *dp,
                     return dp_handle_set_desc(dp, (struct ofl_exp_openflow_msg_set_dp_desc *)msg, sender);
                 }
                 default: {
-                	VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to handle unknown experimenter type (%u).", exp->type);
+                    VLOG_WARN_RL(LOG_MODULE, &rl, "Trying to handle unknown experimenter type (%u).", exp->type);
                     return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_EXPERIMENTER);
                 }
             }

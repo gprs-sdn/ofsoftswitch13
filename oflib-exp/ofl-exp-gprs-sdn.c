@@ -12,6 +12,9 @@
 #include "ofl-exp-gprs-sdn.h"
 #include "../oflib/ofl-print.h"
 #include "../oflib/ofl-log.h"
+#include "../lib/packets.h"
+
+#define IP_FMT "%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8
 
 #define LOG_MODULE ofl_exp_gprs_sdn
 OFL_LOG_INIT(LOG_MODULE)
@@ -21,7 +24,7 @@ ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src, struct ofp_action_heade
 	// TODO
 	// aby fungovalo poriadne aj dpctl... 
 	// inac je nam vytvaranie packetov na nic
-    return -1;
+	return -1;
 }
 
 ofl_err
@@ -34,7 +37,6 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 		err_small = true;
 	} else {
 		switch (ntohs(exp->subtype)) {
-		//TODO: others
 		case GPRS_SDN_PUSH_GPRSNS:
 			if (*len < sizeof(struct gprs_sdn_action_push_gprsns)) {
 				err_small = false;
@@ -42,63 +44,56 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 				struct ofl_exp_gprs_sdn_act_push_gprsns *ofl;
 				struct gprs_sdn_action_push_gprsns *exp2 = (struct gprs_sdn_action_push_gprsns*) exp;
 				ofl = (struct ofl_exp_gprs_sdn_act_push_gprsns*) malloc(sizeof(*ofl));
-				//TODO naparsovat zvysok ofl struktury
-				ofl->subtype = ntohs(exp->subtype);
+
+				ofl->tlli = ntohl(exp2->tlli);
 				ofl->bvci = ntohs(exp2->bvci);
-                ofl->tlli = ntohl(exp2->tlli);
+				ofl->nsapi = exp2->nsapi;
 				ofl->sapi = exp2->sapi;
-                ofl->nsapi = exp2->nsapi;
-				//TODO:
+
 				*dst = (struct ofl_action_header*) ofl;
 			}
 			break;
 
-		case GPRS_SDN_PUSH_IP:
-		    if (*len < sizeof(struct gprs_sdn_action_push_ip)) {
-				 err_small = false;
-		    } else {
-		        struct ofl_exp_gprs_sdn_act_push_ip *ofl;
-				struct gprs_sdn_action_push_ip *exp2 = (struct gprs_sdn_action_push_ip*) exp;
-				ofl = (struct ofl_exp_gprs_sdn_act_push_ip*) malloc(sizeof(*ofl));
-				//TODO naparsovat zvysok ofl struktury
-				ofl->subtype = ntohs(exp->subtype);
-				ofl->dstip = ntohl(exp2->dstip);
-				ofl->srcip = ntohl(exp2->srcip);
-				//TODO:
-				*dst = (struct ofl_action_header*) ofl;
-			}
-			break;
-
-		case GPRS_SDN_PUSH_UDP:
-			if (*len < sizeof(struct gprs_sdn_action_push_udp)) {
+		case GPRS_SDN_PUSH_UDPIP:
+			if (*len < sizeof(struct gprs_sdn_action_push_udpip)) {
 				err_small = false;
 			} else {
-				struct ofl_exp_gprs_sdn_act_push_udp *ofl;
-				struct gprs_sdn_action_push_udp *exp2 = (struct gprs_sdn_action_push_udp*) exp;
-				ofl = (struct ofl_exp_gprs_sdn_act_push_udp*) malloc(sizeof(*ofl));
-				//TODO naparsovat zvysok ofl struktury
-				ofl->subtype = ntohs(exp->subtype);
+				struct ofl_exp_gprs_sdn_act_push_udpip *ofl;
+				struct gprs_sdn_action_push_udpip *exp2 = (struct gprs_sdn_action_push_udpip*) exp;
+				ofl = (struct ofl_exp_gprs_sdn_act_push_udpip*) malloc(sizeof(*ofl));
+
 				ofl->dstport = ntohs(exp2->dstport);
 				ofl->srcport = ntohs(exp2->srcport);
-				//TODO:
+				ofl->dstip = exp2->dstip;
+				ofl->srcip = exp2->srcip;
+
 				*dst = (struct ofl_action_header*) ofl;
 			}
 			break;
 
-		case GPRS_SDN_POP_IP:
-        case GPRS_SDN_POP_UDP: 
-		case GPRS_SDN_HELLO:
+		case GPRS_SDN_POP_UDPIP: 
 		case GPRS_SDN_POP_GPRSNS: {
 			struct ofl_exp_gprs_sdn_act_header *ofl;
 			ofl = (struct ofl_exp_gprs_sdn_act_header*) malloc(sizeof(*ofl));
-			//TODO: make clean - parsovat niekde inde
-			ofl->header.header.type = OFPAT_EXPERIMENTER;
-			ofl->header.header.len = ntohs(exp->len);
-			ofl->header.experimenter_id = GPRS_SDN_VENDOR_ID;
-			ofl->subtype = ntohs(exp->subtype);
+
 			*dst = (struct ofl_action_header*) ofl;
 			}
 			break;
+
+        default:
+            OFL_LOG_WARN(LOG_MODULE, "Trying to unpack unknown GPRS SDN action (subtype=%u).", ntohs(exp->subtype));
+            *len -= ntohs(src->len);
+            return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_EXPERIMENTER);
+		}
+
+		// don't forget to fill in common GPRS action header, if we were successfull
+		if (*dst && !err_small) {
+            struct ofl_exp_gprs_sdn_act_header *ofl = (struct ofl_exp_gprs_sdn_act_header*) *dst;
+
+			ofl->subtype = ntohs(exp->subtype);
+			ofl->header.header.type = OFPAT_EXPERIMENTER;
+			ofl->header.header.len = ntohs(exp->len);
+			ofl->header.experimenter_id = GPRS_SDN_VENDOR_ID;
 		}
 	}
 
@@ -123,16 +118,11 @@ ofl_exp_gprs_sdn_act_ofp_len(struct ofl_action_header *act) {
 	struct ofl_exp_gprs_sdn_act_header *exp = (struct ofl_exp_gprs_sdn_act_header*) act;
 
 	switch (exp->subtype) {
-	//TODO: other types
 	case GPRS_SDN_PUSH_GPRSNS:
 		return sizeof(struct gprs_sdn_action_push_gprsns);
-	case GPRS_SDN_PUSH_UDP:
-		return sizeof(struct gprs_sdn_action_push_udp);
-	case GPRS_SDN_PUSH_IP:
-		return sizeof(struct gprs_sdn_action_push_ip);
-	case GPRS_SDN_HELLO:
-	case GPRS_SDN_POP_IP:
-	case GPRS_SDN_POP_UDP:
+	case GPRS_SDN_PUSH_UDPIP:
+		return sizeof(struct gprs_sdn_action_push_udpip);
+	case GPRS_SDN_POP_UDPIP:
 	case GPRS_SDN_POP_GPRSNS:
 		return sizeof(struct gprs_sdn_action_header);
 	}
@@ -149,12 +139,29 @@ ofl_exp_gprs_sdn_act_to_string(struct ofl_action_header *act) {
 	FILE *stream = open_memstream(&str, &str_size);
 
 	switch(exp->subtype) {
+	case GPRS_SDN_POP_UDPIP:
+		fprintf(stream, "{gprs_sdn_pop_udpip}");
+        break;
+	case GPRS_SDN_POP_GPRSNS:
+		fprintf(stream, "{gprs_sdn_pop_gprsns}");
+        break;
+	case GPRS_SDN_PUSH_GPRSNS: {
+        struct ofl_exp_gprs_sdn_act_push_gprsns *exp2 = (struct ofl_exp_gprs_sdn_act_push_gprsns*) exp;
+		fprintf(stream, "{gprs_sdn_push_gprsns,tlli=0x%x,bvci=%d,sapi=%d,nsapi=%d}",
+                exp2->tlli, exp2->bvci, exp2->sapi, exp2->nsapi);
+        }
+        break;
+	case GPRS_SDN_PUSH_UDPIP: {
+        struct ofl_exp_gprs_sdn_act_push_udpip *exp2 = (struct ofl_exp_gprs_sdn_act_push_udpip*) exp;
+        fprintf(stream, "{gprs_sdn_push_udpip,dp=%d,sp=%d,da=\""IP_FMT"\",sa=\""IP_FMT"\"}", 
+                exp2->dstport, exp2->srcport, IP_ARGS(&(exp2->dstip)), IP_ARGS(&(exp2->srcip)));
+        }
+        break;
 	default:
-		fprintf(stream, "exp{gprs_sdn,subtype=\"%u\"}", exp->subtype);
+		fprintf(stream, "{gprs_sdn,unknown subtype=\"%u\"}", exp->subtype);
 	}
 
 	fclose(stream);
 	return str;
 }
-
 

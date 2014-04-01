@@ -430,6 +430,10 @@ enum llc_frame_format {
 #define LLC_SAPI_LL5 5
 #define LLC_SAPI_LL9 9
 #define LLC_SAPI_LL11 11
+#define LLC_HEADER_LEN 3
+#define LLC_TRAILER_LEN 3
+
+#define SNDCP_HEADER_LEN 4
 
 struct protocols_std {
    struct eth_header      * eth;
