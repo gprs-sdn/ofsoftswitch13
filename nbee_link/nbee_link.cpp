@@ -627,7 +627,7 @@ extern "C" int nblink_packet_parse(struct ofpbuf * pktin,  struct ofl_match * pk
  */
 int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, struct protocols_std * pkt_proto)
 {
-    uint8_t *o;
+    uint8_t *o, *pkt_end;
     uint16_t len;
     struct gprsns_header *gprsns;
 
@@ -646,10 +646,13 @@ int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, 
         return 1;
 #endif
 
+		pkt_end = (uint8_t*)(pktin->data) + pktin->size;
 
     ///////////////////
     // decode GPRSNS
     o = (uint8_t*)(pkt_proto->udp) + UDP_HEADER_LEN;
+		if (o+GPRSNS_HEADER_LEN > pkt_end)
+			return 1;
     pkt_proto->gprsns = gprsns = (struct gprsns_header*)(o);
     if (gprsns->type != GPRSNS_TYPE_UNITDATA)
         return 1;
@@ -660,6 +663,8 @@ int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, 
     ///////////////////
     // decode BSSGP
     o += GPRSNS_HEADER_LEN;
+		if (o >= pkt_end)
+			return 1;
     pkt_proto->bssgp_pdu_type = *o;
     switch (pkt_proto->bssgp_pdu_type) {
     case BSSGP_DL_UNITDATA:
@@ -693,6 +698,10 @@ int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, 
             l = ntohs(*(uint16_t*)(o+1));
 
         printf("BSSGP TLV t=%d l=%d\n", t, l);
+				if (o+l > pkt_end) {
+					printf("Invalid BSSGP TLV... not an GPRS-NS packet.\n");
+					return 1;
+				}
 
         if (t == BSSGP_LLC_PDU) {
             // o points to LLC header
@@ -710,6 +719,8 @@ int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, 
     ///////////////////
     // decode LLC
     len = 1;
+		if (o+2 >= pkt_end)
+			return 1;
     // address 1B
     pkt_proto->llc_sapi = (*o)&0x0f;
     ofl_structs_match_put8(pktout, OXM_GPRS_LLC_SAPI, pkt_proto->llc_sapi);
@@ -754,6 +765,9 @@ int nblink_packet_parse_gprs(struct ofpbuf * pktin,  struct ofl_match * pktout, 
     // SNDCP
     // TS 44.065 chapter 7.2
     o += len;
+		if (o+1 >= pkt_end)
+			return 1;
+
     len = 1;
     // nsapi 1B
     pkt_proto->sndcp_nsapi = (*o)&0x0f;
