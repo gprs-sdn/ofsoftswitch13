@@ -419,6 +419,7 @@ BUILD_ASSERT_DECL(GPRSNS_HEADER_LEN == sizeof(struct gprsns_header));
 #define BSSGP_DL_UNITDATA 0x00
 #define BSSGP_UL_UNITDATA 0x01
 #define BSSGP_LLC_PDU 0x0e
+#define BSSGP_LLC_IEI_LEN 2
 
 // TS 48.064 chapter 6.3
 enum llc_frame_format {

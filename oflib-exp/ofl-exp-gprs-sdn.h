@@ -15,6 +15,9 @@ struct ofl_exp_gprs_sdn_act_header {
     uint16_t subtype;
 };
 
+#ifndef GSM_IMSI_LEN 
+#define GSM_IMSI_LEN 8
+#endif
 
 struct ofl_exp_gprs_sdn_act_push_gprsns {
     struct ofl_action_experimenter header;
@@ -25,6 +28,9 @@ struct ofl_exp_gprs_sdn_act_push_gprsns {
     uint32_t tlli;					/* TLLI */
     uint8_t sapi;					/* NSAPI */
     uint8_t nsapi;					/* NSAPI */
+		uint16_t drx_param;	
+		uint8_t imsi_len;
+		uint8_t imsi[GSM_IMSI_LEN];
 };
 
 struct ofl_exp_gprs_sdn_act_push_udpip {

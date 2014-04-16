@@ -27,6 +27,10 @@ enum gprs_sdn_action_subtype { /* custom actions */
 
 };
 
+#ifndef GSM_IMSI_LEN
+#define GSM_IMSI_LEN 8
+#endif
+
 struct gprs_sdn_action_push_gprsns {
 	uint16_t type;				/* OFPAT_VENDOR */
 	uint16_t len;				/* 16 */
@@ -37,9 +41,12 @@ struct gprs_sdn_action_push_gprsns {
 	uint16_t bvci;				/* BVCI */
 	uint8_t sapi;				/* NSAPI */
 	uint8_t nsapi;				/* NSAPI */
-	uint8_t pad[4];
+	uint16_t drx_param;		/* BSSGP DL-UNITDATA DRX Parameter (EIE 0x0a) */
+	uint8_t imsi_len;
+	uint8_t imsi[GSM_IMSI_LEN];					/* BSSGP DL-UNITDATA IMSI (EIE 0x0d) -- BCD encoded IMSI (max 8 bytes) */
+	uint8_t pad[1];
 };
-OFP_ASSERT(sizeof(struct gprs_sdn_action_push_gprsns) == 24);
+OFP_ASSERT(sizeof(struct gprs_sdn_action_push_gprsns) == 32);
 
 struct gprs_sdn_action_push_udpip {
 	uint16_t type;				/* OFPAT_VENDOR */

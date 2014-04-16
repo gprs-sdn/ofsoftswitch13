@@ -19,6 +19,35 @@
 #define LOG_MODULE ofl_exp_gprs_sdn
 OFL_LOG_INIT(LOG_MODULE)
 
+
+char imsi_string[GSM_IMSI_LEN*2 + 1];
+char bcd_char[] = { '0', '1', '2', '3', '4', '5', '6', '7', 
+										'8', '9', 'x', 'x', 'x', 'x', 'x', ' ', };
+
+char *imsi_to_string(uint8_t *imsi, uint8_t imsi_len)
+{
+	int i, digits;
+	uint8_t imsi_byte;
+
+	// lower 3 bits tells us, if we are IMSI (0x1)
+	// 4th bit tells us, if we have odd numeber of digits
+	//  (0x8 for even)
+	// upper 4 bits are first BCD digit...
+	if ((imsi[0]&0x07) != 0x01) {
+		snprintf(imsi_string, sizeof(imsi_string)-1, "NOT-IMSI!");
+		return imsi_string;
+	}
+	digits = imsi_len*2 - ((imsi[0]&0x8) ? 1 : 0);
+
+	memset(imsi_string, 0, sizeof(imsi_string));
+	for (i=0; i!=digits; i++) {
+		imsi_byte = imsi[(i+1)/2];
+		imsi_string[i] = bcd_char[(imsi_byte>>(i%2?0:4))&0xf];
+	}
+
+	return imsi_string;
+}
+
 int
 ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src, struct ofp_action_header *dst) {
 	// TODO
@@ -49,6 +78,9 @@ ofl_exp_gprs_sdn_act_unpack(struct ofp_action_header *src, size_t *len, struct o
 				ofl->bvci = ntohs(exp2->bvci);
 				ofl->nsapi = exp2->nsapi;
 				ofl->sapi = exp2->sapi;
+				ofl->drx_param = ntohs(exp2->drx_param);
+				ofl->imsi_len = exp2->imsi_len;
+				memcpy(ofl->imsi, exp2->imsi, sizeof(ofl->imsi));
 
 				*dst = (struct ofl_action_header*) ofl;
 			}
@@ -147,8 +179,9 @@ ofl_exp_gprs_sdn_act_to_string(struct ofl_action_header *act) {
         break;
 	case GPRS_SDN_PUSH_GPRSNS: {
         struct ofl_exp_gprs_sdn_act_push_gprsns *exp2 = (struct ofl_exp_gprs_sdn_act_push_gprsns*) exp;
-		fprintf(stream, "{gprs_sdn_push_gprsns,tlli=0x%x,bvci=%d,sapi=%d,nsapi=%d}",
-                exp2->tlli, exp2->bvci, exp2->sapi, exp2->nsapi);
+		fprintf(stream, "{gprs_sdn_push_gprsns,tlli=0x%x,bvci=%d,sapi=%d,nsapi=%d,imsi_len=%d,imsi=%s,drx_param=0x%04x}",
+                exp2->tlli, exp2->bvci, exp2->sapi, exp2->nsapi,exp2->imsi_len,
+								imsi_to_string(exp2->imsi, exp2->imsi_len), exp2->drx_param);
         }
         break;
 	case GPRS_SDN_PUSH_UDPIP: {

@@ -63,10 +63,11 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
     struct snap_header *snap, *new_snap;
     struct gprsns_header *gprsns;
     struct ofl_exp_gprs_sdn_act_push_gprsns *exp = (struct ofl_exp_gprs_sdn_act_push_gprsns *) act;
-    size_t llc_size, payload_size, eth_size, gprsns_size, o;
+    size_t llc_size, payload_size, eth_size, gprsns_size, bssgp_size, o;
     uint32_t crc24;
     uint8_t *llc, *sndcp, *bssgp, *llc_crc;
-    uint8_t is_word = 0;
+    uint8_t llc_is_two_bytes_long = 0;
+		uint8_t bssgp_alignment_size, bssgp_alignment = 0;
 
     packet_handle_std_validate(pkt->handle_std);
 
@@ -85,13 +86,37 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
 
     payload_size = pkt->buffer->size - eth_size;
     llc_size = LLC_HEADER_LEN + SNDCP_HEADER_LEN + payload_size + LLC_TRAILER_LEN;
-    gprsns_size = GPRSNS_HEADER_LEN + 14 + llc_size - payload_size;
-   
+		bssgp_size = 
+			1 +				// Type
+			4 +				// TLLI
+			3 +				// QoS profile
+			2 + 2 +		// PDU lifetime
+			//2 + 16 +	// RAC
+			2 + 2 +		// DRX
+			2 + exp->imsi_len; // IMSI
+		// next IEI should be aligned to multiple of 32 bits... 
+		// how many alignment bytes we need to add?
+		if (bssgp_size % 4 != 0) {
+			bssgp_alignment = 1;
+			/**
+			 * dddd|----|----		no alignment needed
+			 * dddd|dTTx|----		alignment TLV + 1 byte of stuffing
+			 * dddd|ddTT|----		alignment TLV without stuffing
+			 * dddd|dddT|Txxx		alignment TLV + 3 bytes of stuffing
+			 */
+			bssgp_alignment_size = (4-((bssgp_size+2)%4))%4;
+			bssgp_size += 2 + bssgp_alignment_size; // TLV + stuffing
+		}
+		// and finally, LLC IEI is 2 bytes
+		bssgp_size += BSSGP_LLC_IEI_LEN;
+
+    gprsns_size = GPRSNS_HEADER_LEN + bssgp_size + llc_size - payload_size;
+
     // if (LLC_PDU_length > 127) increment gprsns_size by one 
     // because length in LLC_PDU will be 2B
     if (payload_size > 127) {
         gprsns_size++;
-        is_word = 1;
+        llc_is_two_bytes_long = 1;
     }
 
     if (ofpbuf_headroom(pkt->buffer) >= gprsns_size) {
@@ -121,27 +146,61 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
     // BSSGP header
     bssgp = ((uint8_t*)gprsns) + GPRSNS_HEADER_LEN;          
     // DL-UNITDATA
-    bssgp[0] = BSSGP_DL_UNITDATA;
-    *((uint32_t*)(bssgp+1)) = htonl(exp->tlli); 
-    bssgp[7] = 0x04; //QoS - 3B
-    bssgp[8] = 0x16; //PDU Lifetime - 4B
-    bssgp[9] = 0x82; //ext+length - wireshark
-    bssgp[10] = 0x03; //constant
-    bssgp[11] = 0xe8; //constant
+		o = 0;
 
-    // LLC TLV
-    bssgp[12] = BSSGP_LLC_PDU; //LLC TLV T
+		// 1B Type -- fixed
+    bssgp[o++] = BSSGP_DL_UNITDATA;								
 
-    //LLC TLV L
-    if (is_word) {
-        *((uint16_t*)(bssgp+13)) = htons(llc_size);
-        llc = bssgp + 15;
+		// 4B TLLI -- fixed
+    *((uint32_t*)(bssgp+o)) = htonl(exp->tlli);		
+		o+=4;
+
+		// 3B QoS -- fixed
+		//XXX: something real
+    bssgp[o++] = 0x00;															
+		bssgp[o++] = 0x00;
+		bssgp[o++] = 0x20;
+
+		// 4B PDU Lifetime -- TLV
+    bssgp[o++] = 0x16; 
+		bssgp[o++] = 0x82; // ext+length
+		*((uint16_t*)(bssgp+o)) = htons(1000);				// delay in centi-seconds :)
+		o+=2;
+
+		// 4B DRX param -- TLV
+		bssgp[o++] = 0x0a; 
+		bssgp[o++] = 0x82; 
+		*((uint16_t*)(bssgp+o+2)) = htons(exp->drx_param);
+		o+=2;
+
+		// 2+5~8B IMSI param -- TLV
+		bssgp[o++] = 0x0d;
+		bssgp[o++] = 0x80 | exp->imsi_len;
+		memcpy(bssgp+o, exp->imsi, exp->imsi_len);
+		o+=exp->imsi_len;
+
+		// 2+0~3B Alignment -- Optiononal TLV
+		// TS48.018 -- aligment octets -- 11.3.1
+		if (bssgp_alignment) {
+			bssgp[o++] = 0x0;
+			bssgp[o++] = 0x80 | bssgp_alignment_size;
+			if (bssgp_alignment_size)
+				memset(bssgp+o, 0, bssgp_alignment_size);
+			o+=bssgp_alignment_size;
+		}
+
+		// 2+B LLC IEI -- TLV
+    bssgp[o++] = BSSGP_LLC_PDU; // Type
+    if (llc_is_two_bytes_long) {
+        *((uint16_t*)(bssgp+o)) = htons(llc_size);
+				o+=2;
     } else {
         // if gprsns_size LLC_PDU length is less than or equal to 127 we set the 
         // first bit of len to 1 
-        bssgp[13] = 0x80 | (uint8_t)llc_size;
-        llc = bssgp + 14; 
+        bssgp[o] = 0x80 | (uint8_t)llc_size;
+				o+=1;
     }
+		llc = bssgp+o;
 
     // LLC header
     llc[0] = exp->sapi; 
