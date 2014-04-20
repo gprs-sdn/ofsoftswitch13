@@ -38,6 +38,9 @@ AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
+dnl kernel style compile messages
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+
 AC_PROG_CXX
 
 AC_PROG_CC
