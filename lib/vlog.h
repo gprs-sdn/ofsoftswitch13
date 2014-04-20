@@ -100,7 +100,7 @@ struct vlog_rate_limit {
 /* Number of tokens to emit a message.  We add 'rate' tokens per second, which
  * is 60 times the unit used for 'rate', thus 60 tokens are required to emit
  * one message. */
-#define VLOG_MSG_TOKENS 10
+#define VLOG_MSG_TOKENS 1
 
 /* Initializer for a struct vlog_rate_limit, to set up a maximum rate of RATE
  * messages per minute and a maximum burst size of BURST messages. */

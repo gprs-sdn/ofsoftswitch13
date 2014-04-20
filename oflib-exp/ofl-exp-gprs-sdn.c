@@ -24,6 +24,9 @@ char imsi_string[GSM_IMSI_LEN*2 + 1];
 char bcd_char[] = { '0', '1', '2', '3', '4', '5', '6', '7', 
 										'8', '9', 'x', 'x', 'x', 'x', 'x', ' ', };
 
+char *imsi_to_string(uint8_t *imsi, uint8_t imsi_len);
+
+
 char *imsi_to_string(uint8_t *imsi, uint8_t imsi_len)
 {
 	int i, digits;
@@ -49,7 +52,7 @@ char *imsi_to_string(uint8_t *imsi, uint8_t imsi_len)
 }
 
 int
-ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src, struct ofp_action_header *dst) {
+ofl_exp_gprs_sdn_act_pack(struct ofl_action_header *src UNUSED, struct ofp_action_header *dst UNUSED) {
 	// TODO
 	// aby fungovalo poriadne aj dpctl... 
 	// inac je nam vytvaranie packetov na nic

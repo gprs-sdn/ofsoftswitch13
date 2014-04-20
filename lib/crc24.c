@@ -15,7 +15,7 @@
 
 uint32_t crc_table24[256];
 
-void crc_init_table24() {
+void crc_init_table24(void) {
 	uint32_t poly24 = 0;
 	uint8_t poly_bits24[]={0,2,4,5,7,8,13,15,16,17,19,20,21,23/*,24*/};
 	uint32_t i,j;

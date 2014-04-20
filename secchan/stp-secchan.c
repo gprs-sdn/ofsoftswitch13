@@ -76,9 +76,9 @@ stp_local_packet_cb(struct relay *r, void *stp_)
     oh = msg->data;
     /*if (oh->type == OFPT_FEATURES_REPLY
         && msg->size >= offsetof(struct ofp_switch_features, ports)) {
-    	/* TODO Zoltan: Temporarily removed when moving to Openflow 1.1 */
-        /* struct ofp_switch_features *osf = msg->data;
-        osf->capabilities |= htonl(OFPC_STP); *
+    	  // TODO Zoltan: Temporarily removed when moving to Openflow 1.1 
+        struct ofp_switch_features *osf = msg->data;
+        osf->capabilities |= htonl(OFPC_STP); 
         return false;
     }*/
 

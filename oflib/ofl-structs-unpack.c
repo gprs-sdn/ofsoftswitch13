@@ -214,7 +214,7 @@ ofl_structs_instructions_unpack(struct ofp_instruction *src, size_t *len, struct
 }
 
 static ofl_err 
-ofl_structs_table_properties_unpack(struct ofp_table_feature_prop_header * src, size_t *len, struct ofl_table_feature_prop_header **dst, struct ofl_exp *exp){
+ofl_structs_table_properties_unpack(struct ofp_table_feature_prop_header * src, size_t *len, struct ofl_table_feature_prop_header **dst, struct ofl_exp *exp UNUSED){
     size_t plen;
     ofl_err error;
     struct ofl_table_feature_prop_header * prop = NULL;

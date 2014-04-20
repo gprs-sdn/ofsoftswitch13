@@ -261,10 +261,13 @@ remote_rconn_run(struct datapath *dp, struct remote *r, uint8_t conn_id) {
     ofl_err error;
     size_t i;
 
-    if (conn_id == MAIN_CONNECTION)
+    if (conn_id == MAIN_CONNECTION) {
         rconn = r->rconn;
-    else if (conn_id == PTIN_CONNECTION)
+		} else if (conn_id == PTIN_CONNECTION) {
         rconn = r->rconn_aux;
+		} else {
+        exit(1);
+		}
 
     rconn_run(rconn);
     /* Do some remote processing, but cap it at a reasonable amount so that

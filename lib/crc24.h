@@ -15,7 +15,7 @@
 
 #define INVERT24(x)(x ^ 0xFFFFFF)
 
-void crc_init_table24();
+void crc_init_table24(void);
 uint32_t crc_compute24(uint8_t*data, uint32_t len, uint32_t init);
 
 #endif /*_CRC24_H*/

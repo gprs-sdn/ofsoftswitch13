@@ -58,6 +58,11 @@
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
+void dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act);
+void dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act);
+void dp_exp_action_push_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act);
+void dp_exp_action_pop_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act);
+
 void
 dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act) {
     struct eth_header  *eth;
@@ -218,8 +223,8 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
 
     // LLC header
     llc[0] = exp->sapi; 
-    llc[1] = 0xc0 | (n_u>>6)&0x07;		// UI mode + N(U)
-    llc[2] = 0x01 | ((n_u)&0x3f)<<2;	// N(U) + PM bit (FCS)
+    llc[1] = 0xc0 | ((n_u>>6)&0x07);		// UI mode + N(U)
+    llc[2] = 0x01 | (((n_u)&0x3f)<<2);	// N(U) + PM bit (FCS)
 
     // SNDCP header
     sndcp = llc + 3; 
@@ -241,7 +246,7 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
 
 
 void
-dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act UNUSED){
     packet_handle_std_validate(pkt->handle_std);
 
     if(pkt->handle_std->proto->gprsns != NULL) {
@@ -347,7 +352,7 @@ dp_exp_action_push_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
 }
 
 void
-dp_exp_action_pop_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
+dp_exp_action_pop_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act UNUSED){
     struct eth_header *eth; 
     struct ip_header *ip; 
     struct udp_header *udp; 

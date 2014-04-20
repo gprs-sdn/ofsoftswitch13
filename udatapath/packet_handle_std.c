@@ -49,10 +49,11 @@
 
 void
 packet_handle_std_validate(struct packet_handle_std *handle) {
+    struct ofl_match_tlv * iter, *next;
 
     if(handle->valid)
         return;
-    struct ofl_match_tlv * iter, *next;
+
     HMAP_FOR_EACH_SAFE(iter, next, struct ofl_match_tlv, hmap_node, &handle->match.match_fields){
         free(iter->value);
         free(iter);
