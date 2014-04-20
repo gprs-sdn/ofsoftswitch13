@@ -53,6 +53,7 @@ packet_create(struct datapath *dp, uint32_t in_port,
     pkt->dp         = dp;
     pkt->buffer     = buf;
     pkt->in_port    = in_port;
+		pkt->flow_entry	= NULL;
     pkt->action_set = action_set_create(dp->exp);
 
     pkt->packet_out       = packet_out;

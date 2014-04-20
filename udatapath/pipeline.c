@@ -164,6 +164,7 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt) {
                 free(m);
             }
             pkt->handle_std->table_miss = is_table_miss(entry);
+						pkt->flow_entry = entry;
             execute_entry(pl, entry, &next_table, &pkt);
             /* Packet could be destroyed by a meter instruction */
             if (!pkt)

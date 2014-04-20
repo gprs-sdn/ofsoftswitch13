@@ -52,6 +52,7 @@ struct packet {
     struct datapath    *dp;
     struct ofpbuf      *buffer;    /* buffer containing the packet */
     uint32_t            in_port;
+		struct flow_entry  *flow_entry;			/* matching flow_entry */ 
     struct action_set  *action_set; /* action set associated with the packet */
     bool                packet_out; /* true if the packet arrived in a packet out msg */
 

@@ -44,6 +44,7 @@
 #include "oflib-exp/ofl-exp-gprs-sdn.h"
 #include "oflib-exp/ofl-exp-openflow.h"
 #include "oflib-exp/ofl-exp-nicira.h"
+#include "flow_entry.h"
 #include "openflow/openflow.h"
 #include "openflow/gprs-sdn-ext.h"
 #include "openflow/openflow-ext.h"
@@ -58,9 +59,9 @@
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 void
-dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){
-    struct eth_header  *eth,  *new_eth;
-    struct snap_header *snap, *new_snap;
+dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act) {
+    struct eth_header  *eth;
+    struct snap_header *snap;
     struct gprsns_header *gprsns;
     struct ofl_exp_gprs_sdn_act_push_gprsns *exp = (struct ofl_exp_gprs_sdn_act_push_gprsns *) act;
     size_t llc_size, payload_size, eth_size, gprsns_size, bssgp_size, o;
@@ -68,6 +69,7 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
     uint8_t *llc, *sndcp, *bssgp, *llc_crc;
     uint8_t llc_is_two_bytes_long = 0;
 		uint8_t bssgp_alignment_size, bssgp_alignment = 0;
+		uint16_t n_pdu=0, n_u=0;
 
     packet_handle_std_validate(pkt->handle_std);
 
@@ -202,17 +204,29 @@ dp_exp_action_push_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header
     }
 		llc = bssgp+o;
 
+		// SNDCP N-PDU sequence number
+			if (!pkt->flow_entry) {
+			VLOG_WARN_RL(LOG_MODULE, &rl, "Flow entry not found...");
+		} else {
+			// SNDCP N-PDU sequential number
+			n_pdu = (uint16_t)(pkt->flow_entry->stats->packet_count % 4096) ;
+		}   
+		// LLC N(U) unconfirmed sequence number
+		//XXX: since we don't support segmentation on SNDCP layer, this number is
+		// same as SNDCP N-PDU sequence number
+		n_u = n_pdu%512;
+
     // LLC header
     llc[0] = exp->sapi; 
-    llc[1] = 0xc0;
-    llc[2] = 0x01;
-    
+    llc[1] = 0xc0 | (n_u>>6)&0x07;		// UI mode + N(U)
+    llc[2] = 0x01 | ((n_u)&0x3f)<<2;	// N(U) + PM bit (FCS)
+
     // SNDCP header
     sndcp = llc + 3; 
-    sndcp[0] = 0x60 | exp->nsapi;
-    sndcp[1] = 0x00; //no compression
-    sndcp[2] = 0x00; //unacknowledge mode
-    sndcp[3] = 0x00; //FIXME TODO N-PDU nubmers should be incremented in each SNDCP header!!!
+    sndcp[0] = 0x60 | exp->nsapi;		// first segment, SN-UNITDATA, nsapi
+    sndcp[1] = 0x00;								// no compression
+		sndcp[2] = (n_pdu >> 8) & 0x0f;	// segment=0, n-pdu (bit 11-8)
+		sndcp[3] = n_pdu & 0xff;				// n-pdu (bit 7-0)
     
     crc24 = crc_compute24(llc, llc_size-LLC_TRAILER_LEN, 0);
 
@@ -262,8 +276,8 @@ dp_exp_action_pop_gprsns(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header 
 
 void
 dp_exp_action_push_udpip(struct packet *pkt, struct ofl_exp_gprs_sdn_act_header *act){ 
-    struct eth_header  *eth,  *new_eth;
-    struct snap_header *snap, *new_snap;
+    struct eth_header  *eth;
+    struct snap_header *snap;
     struct udp_header *push_udp;
     struct ip_header *push_ip;
     struct ofl_exp_gprs_sdn_act_push_udpip *exp = (struct ofl_exp_gprs_sdn_act_push_udpip *) act;
